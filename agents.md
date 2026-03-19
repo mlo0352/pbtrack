@@ -7,6 +7,7 @@ This repository now contains a working mobile-first, local-first web app built f
 The app currently supports:
 - Pee timer tracking with explicit save
 - Quick note-only pee entries
+- BM logging with explicit save
 - Bruise logging with a front/back SVG body map
 - Log filtering, editing, and deletion
 - Pee and bruise insights
@@ -62,7 +63,7 @@ There is no backend. All user data is stored locally in IndexedDB on the current
   - Export/import page
   - Print view
   - Confirmation modal
-  - Pee graph modal
+  - Entry graph modal for pee/BM daily counts
   - Analytics helpers
 
 ### Persistence
@@ -96,8 +97,9 @@ There is no backend. All user data is stored locally in IndexedDB on the current
 
 ## IndexedDB Model
 
-Only two stores are used:
+Current stores:
 - `peeEntries`
+- `bmEntries`
 - `bruiseEntries`
 
 ### Pee Entry Shape
@@ -135,6 +137,17 @@ Each bruise entry includes:
 - `status`
 - `note`
 
+### BM Entry Shape
+Each BM entry includes:
+- `id`
+- `createdAt`
+- `updatedAt`
+- `entryType`
+- `occurredAt`
+- `size`
+- `tags`
+- `freeTextNote`
+
 ### Active Timer Persistence
 There is no separate timer store.
 An active timer is saved as a `peeEntries` record with:
@@ -155,6 +168,7 @@ Current behavior:
 - `Cancel` available while timer is active
 - Quick actions:
   - Add Note
+  - Add BM
   - Add Bruise
   - View Log
   - Insights
@@ -202,10 +216,26 @@ Actions:
 - Save
 - Cancel
 
-### 4. Log / History
+### 4. BM Entry Modal
+Used for:
+- Creating a BM entry
+- Editing an existing BM entry
+
+Fields:
+- Occurred at
+- Size
+- Tags
+- Note
+
+Actions:
+- Save
+- Cancel
+
+### 5. Log / History
 Filters:
 - All
 - Pee only
+- BM only
 - Bruise only
 - Daily
 - Weekly
@@ -218,7 +248,7 @@ Entry behavior:
 - Direct `Delete` action
 - Delete uses confirmation modal
 
-### 5. Insights
+### 6. Insights
 #### Pee Metrics
 - Total count
 - Average duration
@@ -234,6 +264,17 @@ Notes:
 - `Entries by day` can open the pee chart modal
 - Clicking a specific day in the metric list opens the chart focused on that date
 
+#### BM Metrics
+- Total count
+- Frequency per day
+- Tag frequency
+- Size frequency
+- Entries by day
+
+Notes:
+- `Entries by day` can open the BM chart modal
+- Clicking a specific day in the metric list opens the chart focused on that date
+
 #### Bruise Metrics
 - Total count
 - Unique regions
@@ -247,9 +288,9 @@ Notes:
 Sparse data handling:
 - Shows `Not enough data yet`
 
-### 6. Pee Graph Modal
+### 7. Daily Entry Graph Modal
 Current behavior:
-- Opens from Pee Insights
+- Opens from Pee Insights or BM Insights
 - Default range: all-time
 - Supported ranges:
   - All-time
@@ -260,10 +301,11 @@ Current behavior:
 - Bars can be tapped to select a date
 - Secondary action is `Cancel`
 
-### 7. Export / Import
+### 8. Export / Import
 Export supported:
 - JSON full backup
 - CSV for pee entries
+- CSV for BM entries
 - CSV for bruise entries
 
 Import supported:
@@ -272,7 +314,7 @@ Import supported:
 - Replace existing data
 - Replace uses confirmation modal
 
-### 8. Print View
+### 9. Print View
 Current behavior:
 - Summary cards
 - Full log output
@@ -304,6 +346,11 @@ Do not reintroduce `window.alert` or `window.confirm` for these flows unless the
 - Built from all saved bruise entries
 - Region distribution uses `bodySide + regionKey`
 - Frequency over time groups by observed date
+
+### BM Analytics
+- Built from all saved BM entries
+- Frequency per day uses grouped `occurredAt` dates
+- Daily chart can be opened from Insights
 
 ---
 

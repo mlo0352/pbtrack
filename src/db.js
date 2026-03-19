@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 
-const dbPromise = openDB('pee-and-bruise-tracker', 1, {
+const dbPromise = openDB('pee-and-bruise-tracker', 2, {
   upgrade(db) {
     if (!db.objectStoreNames.contains('peeEntries')) {
       db.createObjectStore('peeEntries', { keyPath: 'id' });
@@ -8,6 +8,10 @@ const dbPromise = openDB('pee-and-bruise-tracker', 1, {
 
     if (!db.objectStoreNames.contains('bruiseEntries')) {
       db.createObjectStore('bruiseEntries', { keyPath: 'id' });
+    }
+
+    if (!db.objectStoreNames.contains('bmEntries')) {
+      db.createObjectStore('bmEntries', { keyPath: 'id' });
     }
   },
 });
@@ -18,12 +22,13 @@ async function getEntries(storeName) {
 }
 
 export async function getAllData() {
-  const [peeEntries, bruiseEntries] = await Promise.all([
+  const [peeEntries, bruiseEntries, bmEntries] = await Promise.all([
     getEntries('peeEntries'),
     getEntries('bruiseEntries'),
+    getEntries('bmEntries'),
   ]);
 
-  return { peeEntries, bruiseEntries };
+  return { peeEntries, bruiseEntries, bmEntries };
 }
 
 export async function saveEntry(storeName, entry) {

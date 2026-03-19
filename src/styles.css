@@ -92,7 +92,8 @@ textarea:focus-visible {
   position: relative;
   width: min(100%, 37rem);
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top, 0px) + 1rem) 1rem calc(env(safe-area-inset-bottom, 0px) + 6.5rem);
+  min-height: 100vh;
+  padding: calc(env(safe-area-inset-top, 0px) + 1rem) 1rem calc(env(safe-area-inset-bottom, 0px) + 8rem);
 }
 
 .content-stack,
@@ -122,7 +123,7 @@ textarea:focus-visible {
 .print-section h2,
 .metric-list h3 {
   margin: 0;
-  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-family: "Baskerville", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   letter-spacing: -0.035em;
 }
 
@@ -134,8 +135,19 @@ textarea:focus-visible {
   color: rgba(39, 39, 39, 0.72);
 }
 
+.eyebrow-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.eyebrow-button:hover,
+.eyebrow-button:focus-visible {
+  color: var(--ink);
+}
+
 .topbar-note,
-.hero-copy,
 .section-heading p,
 .entry-meta,
 .entry-summary,
@@ -275,9 +287,9 @@ textarea:focus-visible {
 
 .timer-readout {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  gap: 1rem;
+  text-align: center;
   margin: 1rem 0 0.75rem;
   padding: 1rem 1.1rem;
   border-radius: var(--radius-lg);
@@ -290,7 +302,16 @@ textarea:focus-visible {
   font-size: 1.35rem;
 }
 
-.action-grid,
+.time-code {
+  font-family: "Courier Prime", "Courier New", "Lucida Console", "SFMono-Regular", monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.inline-time {
+  font-size: 0.96em;
+}
+
 .tag-row,
 .button-row,
 .stats-grid,
@@ -307,13 +328,15 @@ textarea:focus-visible {
 }
 
 .action-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 .action-card {
-  flex: 1 1 10rem;
+  min-height: 8.2rem;
   text-align: left;
-  padding: 1rem;
+  padding: 0.9rem;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(239, 208, 158, 0.18));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
@@ -327,6 +350,29 @@ textarea:focus-visible {
 .action-copy {
   display: block;
   margin-top: 0.35rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.help-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.help-card {
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(210, 216, 179, 0.16));
+  border: 1px solid rgba(39, 39, 39, 0.08);
+}
+
+.help-card h3 {
+  margin: 0 0 0.35rem;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+}
+
+.help-card p {
+  margin: 0;
   color: var(--muted);
 }
 
@@ -563,7 +609,7 @@ textarea {
 .bottom-nav {
   position: fixed;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
   transform: translateX(-50%);
   width: min(calc(100% - 1.5rem), 37rem);
   display: grid;
@@ -575,6 +621,7 @@ textarea {
   backdrop-filter: blur(18px);
   border: 1px solid rgba(255, 255, 255, 0.72);
   box-shadow: var(--shadow-lg);
+  z-index: 12;
 }
 
 .nav-button {
@@ -696,6 +743,23 @@ textarea {
 
   .nav-button {
     font-size: 0.88rem;
+  }
+
+  .action-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .action-card {
+    min-height: 7.6rem;
+    padding: 0.8rem;
+  }
+
+  .action-title {
+    font-size: 0.95rem;
+  }
+
+  .action-copy {
+    font-size: 0.8rem;
   }
 
   .chart-bars {

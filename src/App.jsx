@@ -9,7 +9,9 @@ const NAV_ITEMS = [
 ];
 
 const PEE_TAGS = ['dark', 'cloudy', 'blood', 'burning', 'pain', 'weak stream', 'urgent', 'other'];
+const BM_TAGS = ['hard', 'normal', 'loose', 'watery', 'pain', 'straining', 'blood', 'urgent', 'other'];
 const BRUISE_COLORS = ['red', 'purple', 'blue', 'green', 'yellow', 'brown', 'fading'];
+const BM_SIZES = ['small', 'medium', 'large'];
 const BRUISE_SIZES = ['small', 'medium', 'large'];
 const BRUISE_STATUS = ['improving', 'stable', 'worsening'];
 
@@ -103,10 +105,20 @@ const EMPTY_BRUISE_FORM = {
   note: '',
 };
 
+const EMPTY_BM_FORM = {
+  id: '',
+  createdAt: '',
+  occurredAt: '',
+  size: 'medium',
+  tags: [],
+  freeTextNote: '',
+};
+
 function App() {
   const [view, setView] = useState(getHashView());
   const [peeEntries, setPeeEntries] = useState([]);
   const [bruiseEntries, setBruiseEntries] = useState([]);
+  const [bmEntries, setBmEntries] = useState([]);
   const [activeTimer, setActiveTimer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -117,19 +129,21 @@ function App() {
     end: '',
   });
   const [peeModal, setPeeModal] = useState({ open: false, mode: 'note-create', entry: null });
+  const [bmModal, setBmModal] = useState({ open: false, mode: 'create', entry: null });
   const [bruiseForm, setBruiseForm] = useState(EMPTY_BRUISE_FORM);
   const [bruiseMode, setBruiseMode] = useState('create');
   const [importPayload, setImportPayload] = useState(null);
   const [importFeedback, setImportFeedback] = useState('');
   const [bruiseError, setBruiseError] = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
-  const [graphModal, setGraphModal] = useState({ open: false, range: 'all', selectedDate: '' });
+  const [graphModal, setGraphModal] = useState({ open: false, kind: 'pee', range: 'all', selectedDate: '' });
 
   useEffect(() => {
     async function load() {
       const data = await getAllData();
       setPeeEntries(sortByUpdatedAt(data.peeEntries));
       setBruiseEntries(sortByUpdatedAt(data.bruiseEntries));
+      setBmEntries(sortByUpdatedAt(data.bmEntries));
       setActiveTimer(data.peeEntries.find((entry) => entry.status === 'active') || null);
       setLoading(false);
     }
@@ -158,6 +172,8 @@ function App() {
     [savedPeeEntries]
   );
 
+  const savedBmEntries = useMemo(() => sortByUpdatedAt(bmEntries), [bmEntries]);
+
   const combinedLogEntries = useMemo(() => {
     const peeLog = savedPeeEntries.map((entry) => ({
       ...entry,
@@ -171,10 +187,16 @@ function App() {
       logTimestamp: entry.observedAt || entry.createdAt,
     }));
 
-    return [...peeLog, ...bruiseLog].sort(
+    const bmLog = savedBmEntries.map((entry) => ({
+      ...entry,
+      logType: 'bm',
+      logTimestamp: entry.occurredAt || entry.createdAt,
+    }));
+
+    return [...peeLog, ...bmLog, ...bruiseLog].sort(
       (a, b) => new Date(b.logTimestamp).getTime() - new Date(a.logTimestamp).getTime()
     );
-  }, [savedPeeEntries, bruiseEntries]);
+  }, [savedPeeEntries, savedBmEntries, bruiseEntries]);
 
   const filteredLogEntries = useMemo(
     () => filterLogEntries(combinedLogEntries, historyFilters),
@@ -182,12 +204,17 @@ function App() {
   );
 
   const peeStats = useMemo(() => buildPeeStats(timerPeeEntries), [timerPeeEntries]);
+  const bmStats = useMemo(() => buildBmStats(savedBmEntries), [savedBmEntries]);
   const bruiseStats = useMemo(() => buildBruiseStats(bruiseEntries), [bruiseEntries]);
 
   async function syncPeeEntries(nextEntries) {
     const sortedEntries = sortByUpdatedAt(nextEntries);
     setPeeEntries(sortedEntries);
     setActiveTimer(sortedEntries.find((entry) => entry.status === 'active') || null);
+  }
+
+  function syncBmEntries(nextEntries) {
+    setBmEntries(sortByUpdatedAt(nextEntries));
   }
 
   function navigate(nextView) {
@@ -234,6 +261,7 @@ function App() {
     openConfirmModal({
       title: 'Cancel active timer?',
       message: 'The running timer draft will be removed and cannot be recovered.',
+      cancelLabel: 'Cancel',
       confirmLabel: 'Cancel timer',
       tone: 'danger',
       action: { type: 'cancel-timer', id: activeTimer.id },
@@ -280,6 +308,24 @@ function App() {
 
   function closePeeModal() {
     setPeeModal({ open: false, mode: 'note-create', entry: null });
+  }
+
+  function openBmModal(entry = null) {
+    const timestamp = new Date().toISOString();
+    setBmModal({
+      open: true,
+      mode: entry ? 'edit' : 'create',
+      entry:
+        entry || {
+          ...EMPTY_BM_FORM,
+          createdAt: timestamp,
+          occurredAt: timestamp,
+        },
+    });
+  }
+
+  function closeBmModal() {
+    setBmModal({ open: false, mode: 'create', entry: null });
   }
 
   async function handleSavePeeEntry(formEntry) {
@@ -330,6 +376,28 @@ function App() {
     await deleteEntry('peeEntries', id);
     await syncPeeEntries(peeEntries.filter((entry) => entry.id !== id));
     closePeeModal();
+  }
+
+  async function handleSaveBmEntry(formEntry) {
+    const timestamp = new Date().toISOString();
+    const entry = {
+      ...formEntry,
+      id: bmModal.mode === 'edit' ? formEntry.id : makeId('bm'),
+      createdAt: bmModal.mode === 'edit' ? formEntry.createdAt : timestamp,
+      updatedAt: timestamp,
+      occurredAt: formEntry.occurredAt || timestamp,
+      entryType: 'bm',
+    };
+
+    await saveEntry('bmEntries', entry);
+
+    const nextEntries =
+      bmModal.mode === 'edit'
+        ? bmEntries.map((current) => (current.id === entry.id ? entry : current))
+        : [...bmEntries, entry];
+
+    syncBmEntries(nextEntries);
+    closeBmModal();
   }
 
   function openBruiseCreate() {
@@ -386,6 +454,11 @@ function App() {
       return;
     }
 
+    if (item.logType === 'bm') {
+      openBmModal(item);
+      return;
+    }
+
     openBruiseEdit(item);
   }
 
@@ -393,6 +466,7 @@ function App() {
     openConfirmModal({
       title: `Delete ${item.logType} entry?`,
       message: 'This removes the saved entry from local storage on this device.',
+      cancelLabel: 'Cancel',
       confirmLabel: 'Delete entry',
       tone: 'danger',
       action: { type: 'delete-log-entry', entry: item },
@@ -413,6 +487,7 @@ function App() {
     const payload = {
       exportedAt: new Date().toISOString(),
       peeEntries,
+      bmEntries,
       bruiseEntries,
     };
 
@@ -424,11 +499,18 @@ function App() {
   }
 
   function handleDownloadCsv(storeName) {
-    const rows = storeName === 'peeEntries' ? savedPeeEntries : bruiseEntries;
+    const rows =
+      storeName === 'peeEntries'
+        ? savedPeeEntries
+        : storeName === 'bmEntries'
+          ? savedBmEntries
+          : bruiseEntries;
     const csv = convertToCsv(rows, storeName);
     const fileName =
       storeName === 'peeEntries'
         ? `pee-entries-${dateStamp()}.csv`
+        : storeName === 'bmEntries'
+          ? `bm-entries-${dateStamp()}.csv`
         : `bruise-entries-${dateStamp()}.csv`;
     downloadFile(fileName, csv, 'text/csv;charset=utf-8;');
   }
@@ -443,10 +525,11 @@ function App() {
       const rawText = await file.text();
       const parsed = JSON.parse(rawText);
       const nextPeeEntries = Array.isArray(parsed.peeEntries) ? parsed.peeEntries : [];
+      const nextBmEntries = Array.isArray(parsed.bmEntries) ? parsed.bmEntries : [];
       const nextBruiseEntries = Array.isArray(parsed.bruiseEntries) ? parsed.bruiseEntries : [];
-      setImportPayload({ peeEntries: nextPeeEntries, bruiseEntries: nextBruiseEntries });
+      setImportPayload({ peeEntries: nextPeeEntries, bmEntries: nextBmEntries, bruiseEntries: nextBruiseEntries });
       setImportFeedback(
-        `Loaded ${nextPeeEntries.length} pee entries and ${nextBruiseEntries.length} bruise entries.`
+        `Loaded ${nextPeeEntries.length} pee entries, ${nextBmEntries.length} BM entries, and ${nextBruiseEntries.length} bruise entries.`
       );
     } catch {
       setImportPayload(null);
@@ -463,6 +546,7 @@ function App() {
       openConfirmModal({
         title: 'Replace existing local data?',
         message: 'All current pee and bruise entries on this device will be replaced by the imported backup.',
+        cancelLabel: 'Cancel',
         confirmLabel: 'Replace data',
         tone: 'danger',
         action: { type: 'replace-import' },
@@ -471,15 +555,19 @@ function App() {
     }
 
     let nextPeeEntries = [];
+    let nextBmEntries = [];
     let nextBruiseEntries = [];
 
     if (mode === 'replace-confirmed') {
       await clearStore('peeEntries');
+      await clearStore('bmEntries');
       await clearStore('bruiseEntries');
       nextPeeEntries = sortByUpdatedAt(importPayload.peeEntries);
+      nextBmEntries = sortByUpdatedAt(importPayload.bmEntries);
       nextBruiseEntries = sortByUpdatedAt(importPayload.bruiseEntries);
     } else {
       nextPeeEntries = mergeEntries(peeEntries, importPayload.peeEntries);
+      nextBmEntries = mergeEntries(bmEntries, importPayload.bmEntries);
       nextBruiseEntries = mergeEntries(bruiseEntries, importPayload.bruiseEntries);
     }
 
@@ -487,11 +575,16 @@ function App() {
       await saveEntries('peeEntries', nextPeeEntries);
     }
 
+    if (nextBmEntries.length > 0) {
+      await saveEntries('bmEntries', nextBmEntries);
+    }
+
     if (nextBruiseEntries.length > 0) {
       await saveEntries('bruiseEntries', nextBruiseEntries);
     }
 
     await syncPeeEntries(nextPeeEntries);
+    syncBmEntries(nextBmEntries);
     setBruiseEntries(nextBruiseEntries);
     setImportFeedback(mode === 'replace-confirmed' ? 'Local data replaced.' : 'Imported backup merged.');
   }
@@ -511,11 +604,18 @@ function App() {
     }
 
     if (action.type === 'delete-log-entry') {
-      const storeName = action.entry.logType === 'pee' ? 'peeEntries' : 'bruiseEntries';
+      const storeName =
+        action.entry.logType === 'pee'
+          ? 'peeEntries'
+          : action.entry.logType === 'bm'
+            ? 'bmEntries'
+            : 'bruiseEntries';
       await deleteEntry(storeName, action.entry.id);
 
       if (storeName === 'peeEntries') {
         await syncPeeEntries(peeEntries.filter((entry) => entry.id !== action.entry.id));
+      } else if (storeName === 'bmEntries') {
+        syncBmEntries(bmEntries.filter((entry) => entry.id !== action.entry.id));
       } else {
         setBruiseEntries(bruiseEntries.filter((entry) => entry.id !== action.entry.id));
       }
@@ -543,8 +643,10 @@ function App() {
       {view !== 'print' && (
         <header className="topbar">
           <div>
-            <p className="eyebrow">Local-first log</p>
-            <h1>P&amp;BT</h1>
+            <button type="button" className="eyebrow eyebrow-button" onClick={() => navigate('help')}>
+              Local-first log
+            </button>
+            <h1>PB²Track</h1>
           </div>
         </header>
       )}
@@ -558,8 +660,8 @@ function App() {
             onStopTimer={handleStopTimer}
             onCancelTimer={handleCancelTimer}
             onOpenNote={openNoteModal}
+            onOpenBm={() => openBmModal()}
             onOpenBruise={openBruiseCreate}
-            onNavigate={navigate}
             recentEntries={combinedLogEntries.slice(0, 4)}
           />
         )}
@@ -586,15 +688,20 @@ function App() {
         {view === 'insights' && (
           <InsightsView
             peeStats={peeStats}
+            bmStats={bmStats}
             bruiseStats={bruiseStats}
             onOpenPeeGraph={(selectedDate = '') =>
-              setGraphModal({ open: true, range: 'all', selectedDate })
+              setGraphModal({ open: true, kind: 'pee', range: 'all', selectedDate })
+            }
+            onOpenBmGraph={(selectedDate = '') =>
+              setGraphModal({ open: true, kind: 'bm', range: 'all', selectedDate })
             }
           />
         )}
         {view === 'export' && (
           <ExportView
             peeCount={savedPeeEntries.length}
+            bmCount={savedBmEntries.length}
             bruiseCount={bruiseEntries.length}
             importFeedback={importFeedback}
             importPayload={importPayload}
@@ -605,9 +712,11 @@ function App() {
             onOpenPrint={() => navigate('print')}
           />
         )}
+        {view === 'help' && <HelpView onBack={() => navigate('home')} />}
         {view === 'print' && (
           <PrintView
             peeStats={peeStats}
+            bmStats={bmStats}
             bruiseStats={bruiseStats}
             entries={combinedLogEntries}
             onBack={() => navigate('export')}
@@ -639,6 +748,14 @@ function App() {
         />
       )}
 
+      {bmModal.open && (
+        <BMEntryModal
+          modal={bmModal}
+          onClose={closeBmModal}
+          onSave={handleSaveBmEntry}
+        />
+      )}
+
       {confirmModal && (
         <ConfirmModal
           modal={confirmModal}
@@ -649,9 +766,10 @@ function App() {
 
       {graphModal.open && (
         <PeeGraphModal
-          entriesByDay={peeStats.entriesByDay}
+          title={graphModal.kind === 'bm' ? 'BM entries by day' : 'Pee entries by day'}
+          entriesByDay={graphModal.kind === 'bm' ? bmStats.entriesByDay : peeStats.entriesByDay}
           modal={graphModal}
-          onClose={() => setGraphModal({ open: false, range: 'all', selectedDate: '' })}
+          onClose={() => setGraphModal({ open: false, kind: 'pee', range: 'all', selectedDate: '' })}
           onChange={(nextModal) => setGraphModal((current) => ({ ...current, ...nextModal }))}
         />
       )}
@@ -666,8 +784,8 @@ function HomeView({
   onStopTimer,
   onCancelTimer,
   onOpenNote,
+  onOpenBm,
   onOpenBruise,
-  onNavigate,
   recentEntries,
 }) {
   const elapsed = activeTimer ? now - new Date(activeTimer.startTime).getTime() : 0;
@@ -675,13 +793,7 @@ function HomeView({
   return (
     <section className="content-stack">
       <section className="hero-panel">
-        <p className="eyebrow">Fast entry flow</p>
         <h2>{activeTimer ? 'Timer running' : 'Ready for the next entry'}</h2>
-        <p className="hero-copy">
-          {activeTimer
-            ? 'Stop the timer to review symptoms and save the entry explicitly.'
-            : 'Two taps covers the main flow. Everything stays local to this phone.'}
-        </p>
         <button
           type="button"
           className={activeTimer ? 'timer-button timer-button-stop' : 'timer-button'}
@@ -690,8 +802,7 @@ function HomeView({
           {activeTimer ? 'Stop Timer' : 'Start Timer'}
         </button>
         <div className="timer-readout">
-          <strong>{formatDuration(elapsed)}</strong>
-          <span>{activeTimer ? 'Timer running' : 'No active timer'}</span>
+          <strong className="time-code">{formatDuration(elapsed)}</strong>
         </div>
         {activeTimer && (
           <button type="button" className="ghost-button" onClick={onCancelTimer}>
@@ -714,17 +825,9 @@ function HomeView({
             <span className="action-title">Add Bruise</span>
             <span className="action-copy">Mark a body region and details.</span>
           </button>
-          <button type="button" className="action-card" onClick={() => onNavigate('log')}>
-            <span className="action-title">View Log</span>
-            <span className="action-copy">Review, filter, and edit entries.</span>
-          </button>
-          <button type="button" className="action-card" onClick={() => onNavigate('insights')}>
-            <span className="action-title">Insights</span>
-            <span className="action-copy">See counts, patterns, and trends.</span>
-          </button>
-          <button type="button" className="action-card" onClick={() => onNavigate('export')}>
-            <span className="action-title">Export</span>
-            <span className="action-copy">Back up the device data now.</span>
+          <button type="button" className="action-card" onClick={onOpenBm}>
+            <span className="action-title">Add BM</span>
+            <span className="action-copy">Log a bowel movement.</span>
           </button>
         </div>
       </section>
@@ -970,6 +1073,7 @@ function LogView({ filters, entries, onChangeFilters, onEdit, onDelete }) {
               {[
                 ['all', 'All'],
                 ['pee', 'Pee only'],
+                ['bm', 'BM only'],
                 ['bruise', 'Bruise only'],
               ].map(([value, label]) => (
                 <button
@@ -1047,8 +1151,19 @@ function LogView({ filters, entries, onChangeFilters, onEdit, onDelete }) {
                   <p className="entry-meta">{formatDateTime(entry.logTimestamp)}</p>
                 </div>
               </div>
-              <p className="entry-summary">{entrySummary(entry)}</p>
+              {entrySummary(entry, { suppressTagEcho: true }) && (
+                <p className="entry-summary">{entrySummary(entry, { suppressTagEcho: true })}</p>
+              )}
               {entry.logType === 'pee' && entry.tags?.length > 0 && (
+                <div className="tag-row">
+                  {entry.tags.map((tag) => (
+                    <span key={tag} className="tag-pill">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {entry.logType === 'bm' && entry.tags?.length > 0 && (
                 <div className="tag-row">
                   {entry.tags.map((tag) => (
                     <span key={tag} className="tag-pill">
@@ -1086,7 +1201,7 @@ function LogView({ filters, entries, onChangeFilters, onEdit, onDelete }) {
   );
 }
 
-function InsightsView({ peeStats, bruiseStats, onOpenPeeGraph }) {
+function InsightsView({ peeStats, bmStats, bruiseStats, onOpenPeeGraph, onOpenBmGraph }) {
   return (
     <section className="content-stack">
       <section className="panel">
@@ -1100,10 +1215,10 @@ function InsightsView({ peeStats, bruiseStats, onOpenPeeGraph }) {
           <>
             <div className="stats-grid">
               <StatCard label="Total count" value={String(peeStats.totalCount)} />
-              <StatCard label="Average duration" value={formatDuration(peeStats.averageDuration)} />
-              <StatCard label="Median duration" value={formatDuration(peeStats.medianDuration)} />
-              <StatCard label="Shortest" value={formatDuration(peeStats.shortest)} />
-              <StatCard label="Longest" value={formatDuration(peeStats.longest)} />
+              <StatCard label="Average duration" value={<span className="time-code">{formatDuration(peeStats.averageDuration)}</span>} />
+              <StatCard label="Median duration" value={<span className="time-code">{formatDuration(peeStats.medianDuration)}</span>} />
+              <StatCard label="Shortest" value={<span className="time-code">{formatDuration(peeStats.shortest)}</span>} />
+              <StatCard label="Longest" value={<span className="time-code">{formatDuration(peeStats.longest)}</span>} />
               <StatCard label="Frequency/day" value={peeStats.frequencyPerDay.toFixed(1)} />
             </div>
             <MetricList title="Tag frequency" data={peeStats.tagFrequency} emptyLabel="No pee tags yet." />
@@ -1114,6 +1229,36 @@ function InsightsView({ peeStats, bruiseStats, onOpenPeeGraph }) {
               actionLabel="Open graph"
               onAction={() => onOpenPeeGraph('')}
               onItemClick={(date) => onOpenPeeGraph(date)}
+            />
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <h2>BM insights</h2>
+          <p>Track bowel-movement frequency, size, tags, and daily patterns.</p>
+        </div>
+        {bmStats.totalCount < 1 ? (
+          <p className="empty-state">Not enough data yet</p>
+        ) : (
+          <>
+            <div className="stats-grid">
+              <StatCard label="Total count" value={String(bmStats.totalCount)} />
+              <StatCard label="Frequency/day" value={bmStats.frequencyPerDay.toFixed(1)} />
+              <StatCard label="Small" value={String(bmStats.sizeFrequency.small || 0)} />
+              <StatCard label="Medium" value={String(bmStats.sizeFrequency.medium || 0)} />
+              <StatCard label="Large" value={String(bmStats.sizeFrequency.large || 0)} />
+            </div>
+            <MetricList title="Tag frequency" data={bmStats.tagFrequency} emptyLabel="No BM tags yet." />
+            <MetricList title="Size frequency" data={bmStats.sizeFrequency} emptyLabel="No BM size data yet." />
+            <MetricList
+              title="Entries by day"
+              data={bmStats.entriesByDay}
+              emptyLabel="No BM daily counts yet."
+              actionLabel="Open graph"
+              onAction={() => onOpenBmGraph('')}
+              onItemClick={(date) => onOpenBmGraph(date)}
             />
           </>
         )}
@@ -1147,6 +1292,7 @@ function InsightsView({ peeStats, bruiseStats, onOpenPeeGraph }) {
 
 function ExportView({
   peeCount,
+  bmCount,
   bruiseCount,
   importFeedback,
   importPayload,
@@ -1166,6 +1312,7 @@ function ExportView({
 
         <div className="stats-grid">
           <StatCard label="Saved pee entries" value={String(peeCount)} />
+          <StatCard label="Saved BM entries" value={String(bmCount)} />
           <StatCard label="Bruise entries" value={String(bruiseCount)} />
         </div>
 
@@ -1175,6 +1322,9 @@ function ExportView({
           </button>
           <button type="button" className="secondary-button" onClick={() => onDownloadCsv('peeEntries')}>
             Export pee CSV
+          </button>
+          <button type="button" className="secondary-button" onClick={() => onDownloadCsv('bmEntries')}>
+            Export BM CSV
           </button>
           <button type="button" className="secondary-button" onClick={() => onDownloadCsv('bruiseEntries')}>
             Export bruise CSV
@@ -1221,7 +1371,58 @@ function ExportView({
   );
 }
 
-function PrintView({ peeStats, bruiseStats, entries, onBack }) {
+function HelpView({ onBack }) {
+  return (
+    <section className="content-stack">
+      <section className="panel">
+        <div className="section-heading">
+          <h2>How to use P&amp;BT</h2>
+          <p>Use the home screen for fast entry, then review details in Log, Insights, or Export.</p>
+        </div>
+
+        <div className="help-stack">
+          <article className="help-card">
+            <h3>Start and stop the pee timer</h3>
+            <p>Tap `Start Timer`, then tap `Stop Timer` when finished. Review the entry in the pee modal and save it explicitly.</p>
+          </article>
+
+          <article className="help-card">
+            <h3>Add note, bruise, or BM entries</h3>
+            <p>Use `Add Note`, `Add Bruise`, or `Add BM` from Home. Each flow stays local and only saves when you tap `Save`.</p>
+          </article>
+
+          <article className="help-card">
+            <h3>Edit and delete from Log</h3>
+            <p>Open `Log` to filter entries, edit saved records, or delete them with confirmation.</p>
+          </article>
+
+          <article className="help-card">
+            <h3>View patterns in Insights</h3>
+            <p>Insights shows counts, durations, tag frequency, and daily graphs for pee and BM entries, plus bruise trends.</p>
+          </article>
+
+          <article className="help-card">
+            <h3>Export regularly</h3>
+            <p>Use `Export` to create CSV or JSON backups. JSON import can merge with or replace current local data.</p>
+          </article>
+
+          <article className="help-card">
+            <h3>Your data is local only</h3>
+            <p>P&amp;BT has no backend and no cloud sync. Entries live in IndexedDB on this device unless you export them yourself.</p>
+          </article>
+        </div>
+
+        <div className="button-row">
+          <button type="button" className="secondary-button" onClick={onBack}>
+            Back to Home
+          </button>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function PrintView({ peeStats, bmStats, bruiseStats, entries, onBack }) {
   return (
     <section className="print-report">
       <div className="print-toolbar">
@@ -1243,7 +1444,8 @@ function PrintView({ peeStats, bruiseStats, entries, onBack }) {
         <h2>Summary</h2>
         <div className="stats-grid">
           <StatCard label="Pee entries" value={String(peeStats.totalCount)} />
-          <StatCard label="Avg pee duration" value={formatDuration(peeStats.averageDuration || 0)} />
+          <StatCard label="Avg pee duration" value={<span className="time-code">{formatDuration(peeStats.averageDuration || 0)}</span>} />
+          <StatCard label="BM entries" value={String(bmStats.totalCount)} />
           <StatCard label="Bruise entries" value={String(bruiseStats.totalCount)} />
           <StatCard label="Unique bruise regions" value={String(bruiseStats.uniqueRegions || 0)} />
         </div>
@@ -1336,7 +1538,7 @@ function PeeEntryModal({ modal, onClose, onSave, onDiscard }) {
 
         <div className="field">
           <span>Duration</span>
-          <p className="selection-pill">{formatDuration(form.duration)}</p>
+          <p className="selection-pill"><span className="time-code">{formatDuration(form.duration)}</span></p>
         </div>
 
         <TagSelector
@@ -1381,7 +1583,94 @@ function PeeEntryModal({ modal, onClose, onSave, onDiscard }) {
   );
 }
 
+function BMEntryModal({ modal, onClose, onSave }) {
+  const [form, setForm] = useState(modal.entry);
+
+  useEffect(() => {
+    setForm(modal.entry);
+  }, [modal.entry]);
+
+  if (!form) {
+    return null;
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-sheet">
+        <div className="section-heading">
+          <h2>{modal.mode === 'edit' ? 'Edit BM entry' : 'Add BM'}</h2>
+          <p>Save a bowel movement entry with size, tags, and an optional note.</p>
+        </div>
+
+        <label className="field">
+          <span>Occurred at</span>
+          <input
+            type="datetime-local"
+            value={toInputDateTime(form.occurredAt)}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                occurredAt: fromInputDateTime(event.target.value),
+              }))
+            }
+          />
+        </label>
+
+        <div className="field">
+          <span>Size</span>
+          <div className="segmented wrap">
+            {BM_SIZES.map((size) => (
+              <button
+                key={size}
+                type="button"
+                className={form.size === size ? 'segment active' : 'segment'}
+                onClick={() => setForm((current) => ({ ...current, size }))}
+              >
+                {capitalize(size)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <TagSelector
+          label="Tags"
+          options={BM_TAGS}
+          selected={form.tags}
+          onToggle={(tag) =>
+            setForm((current) => ({
+              ...current,
+              tags: toggleTag(current.tags, tag),
+            }))
+          }
+        />
+
+        <label className="field">
+          <span>Note</span>
+          <textarea
+            rows="4"
+            value={form.freeTextNote}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, freeTextNote: event.target.value }))
+            }
+          />
+        </label>
+
+        <div className="button-row">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="primary-button" onClick={() => onSave(form)}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmModal({ modal, onClose, onConfirm }) {
+  const cancelLabel = modal.cancelLabel || 'Cancel';
+
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-sheet modal-sheet-sm">
@@ -1392,7 +1681,7 @@ function ConfirmModal({ modal, onClose, onConfirm }) {
 
         <div className="button-row">
           <button type="button" className="secondary-button" onClick={onClose}>
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"
@@ -1407,7 +1696,7 @@ function ConfirmModal({ modal, onClose, onConfirm }) {
   );
 }
 
-function PeeGraphModal({ entriesByDay, modal, onClose, onChange }) {
+function PeeGraphModal({ title, entriesByDay, modal, onClose, onChange }) {
   const sortedDates = Object.keys(entriesByDay).sort((a, b) => new Date(a) - new Date(b));
   const latestDate = sortedDates[sortedDates.length - 1] || '';
   const filterDate = modal.selectedDate || latestDate;
@@ -1435,7 +1724,7 @@ function PeeGraphModal({ entriesByDay, modal, onClose, onChange }) {
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-sheet chart-modal">
         <div className="section-heading">
-          <h2>Pee entries by day</h2>
+          <h2>{title}</h2>
           <p>Default view is all-time. Switch range or jump to a specific date.</p>
         </div>
 
@@ -1479,9 +1768,9 @@ function PeeGraphModal({ entriesByDay, modal, onClose, onChange }) {
 
         <div className="chart-panel">
           {filteredEntries.length === 0 ? (
-            <p className="empty-state">No pee entries are available for the selected range.</p>
+            <p className="empty-state">No entries are available for the selected range.</p>
           ) : (
-            <div className="chart-bars" aria-label="Pee entries by day chart">
+            <div className="chart-bars" aria-label={`${title} chart`}>
               {filteredEntries.map((item) => (
                 <button
                   key={item.date}
@@ -1619,6 +1908,36 @@ function buildPeeStats(entries) {
   };
 }
 
+function buildBmStats(entries) {
+  if (entries.length === 0) {
+    return {
+      totalCount: 0,
+      frequencyPerDay: 0,
+      tagFrequency: {},
+      sizeFrequency: {},
+      entriesByDay: {},
+    };
+  }
+
+  const entriesByDay = groupCounts(entries, (entry) => formatDateOnly(entry.occurredAt || entry.createdAt));
+  const tagFrequency = {};
+  const sizeFrequency = groupCounts(entries, (entry) => entry.size || 'medium');
+
+  entries.forEach((entry) => {
+    (entry.tags || []).forEach((tag) => {
+      tagFrequency[tag] = (tagFrequency[tag] || 0) + 1;
+    });
+  });
+
+  return {
+    totalCount: entries.length,
+    frequencyPerDay: entries.length / Math.max(1, Object.keys(entriesByDay).length),
+    tagFrequency,
+    sizeFrequency,
+    entriesByDay,
+  };
+}
+
 function buildBruiseStats(entries) {
   const statusCounts = groupCounts(entries, (entry) => entry.status || 'stable');
   const regionDistribution = groupCounts(entries, (entry) => `${capitalize(entry.bodySide)} ${displayRegion(entry)}`);
@@ -1708,6 +2027,8 @@ function convertToCsv(entries, storeName) {
   const fields =
     storeName === 'peeEntries'
       ? ['id', 'createdAt', 'updatedAt', 'entryMode', 'startTime', 'endTime', 'duration', 'tags', 'freeTextNote']
+      : storeName === 'bmEntries'
+        ? ['id', 'createdAt', 'updatedAt', 'occurredAt', 'size', 'tags', 'freeTextNote']
       : ['id', 'createdAt', 'updatedAt', 'observedAt', 'bodySide', 'regionKey', 'regionType', 'limbType', 'size', 'colorTags', 'tenderness', 'causeKnown', 'causeDescription', 'status', 'note'];
 
   return [
@@ -1748,14 +2069,24 @@ function entryTitle(entry) {
     return `Bruise · ${capitalize(entry.bodySide)} ${displayRegion(entry)}`;
   }
 
+  if (entry.logType === 'bm') {
+    return `BM entry · ${capitalize(entry.size)}`;
+  }
+
   if (entry.entryMode === 'note') {
     return 'Quick note';
   }
 
-  return `Pee entry · ${formatDuration(entry.duration)}`;
+  return (
+    <>
+      Pee entry · <span className="time-code inline-time">{formatDuration(entry.duration)}</span>
+    </>
+  );
 }
 
-function entrySummary(entry) {
+function entrySummary(entry, options = {}) {
+  const { suppressTagEcho = false } = options;
+
   if (entry.logType === 'bruise') {
     const parts = [capitalize(entry.size), entry.status];
     if (entry.note) {
@@ -1766,12 +2097,31 @@ function entrySummary(entry) {
     return parts.join(' · ');
   }
 
+  if (entry.logType === 'bm') {
+    if (entry.freeTextNote) {
+      return entry.freeTextNote;
+    }
+
+    if (suppressTagEcho) {
+      return '';
+    }
+
+    return entry.tags?.length ? entry.tags.join(', ') : 'No tags';
+  }
+
   if (entry.entryMode === 'note') {
     return entry.freeTextNote || 'Note-only entry.';
   }
 
-  const base = entry.tags?.length ? entry.tags.join(', ') : 'No tags';
-  return entry.freeTextNote ? `${base} · ${entry.freeTextNote}` : base;
+  if (entry.freeTextNote) {
+    return entry.freeTextNote;
+  }
+
+  if (suppressTagEcho) {
+    return '';
+  }
+
+  return entry.tags?.length ? entry.tags.join(', ') : 'No tags';
 }
 
 function displayRegion(entry) {
@@ -1790,14 +2140,10 @@ function formatDuration(durationMs) {
   const seconds = totalSeconds % 60;
 
   if (hours > 0) {
-    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+    return `${String(hours).padStart(2, '0')}h:${String(minutes).padStart(2, '0')}m:${String(seconds).padStart(2, '0')}s`;
   }
 
-  if (minutes > 0) {
-    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
-  }
-
-  return `${seconds}s`;
+  return `${String(minutes).padStart(2, '0')}m:${String(seconds).padStart(2, '0')}s`;
 }
 
 function formatDateTime(value) {
@@ -1900,7 +2246,7 @@ function dateStamp() {
 
 function getHashView() {
   const hash = window.location.hash.replace('#', '');
-  const allowed = new Set(['home', 'bruise', 'log', 'insights', 'export', 'print']);
+  const allowed = new Set(['home', 'bruise', 'log', 'insights', 'export', 'help', 'print']);
   return allowed.has(hash) ? hash : 'home';
 }
 
