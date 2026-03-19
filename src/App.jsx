@@ -9,11 +9,15 @@ const NAV_ITEMS = [
 ];
 
 const PEE_TAGS = ['dark', 'cloudy', 'blood', 'burning', 'pain', 'weak stream', 'urgent', 'other'];
+const NOTE_TYPES = ['symptom', 'general', 'pee'];
+const SYMPTOM_TAGS = ['headache', 'fatigue', 'anxiety', 'nausea', 'dizziness', 'pain', 'cramps', 'other'];
+const GENERAL_NOTE_TAGS = ['water', 'medication', 'meal', 'supplement', 'caffeine', 'alcohol', 'exercise', 'other'];
 const BM_TAGS = ['hard', 'normal', 'loose', 'watery', 'pain', 'straining', 'blood', 'urgent', 'other'];
 const BRUISE_COLORS = ['red', 'purple', 'blue', 'green', 'yellow', 'brown', 'fading'];
 const BM_SIZES = ['small', 'medium', 'large'];
 const BRUISE_SIZES = ['small', 'medium', 'large'];
 const BRUISE_STATUS = ['improving', 'stable', 'worsening'];
+const SLEEP_QUALITY_OPTIONS = ['poor', 'okay', 'good'];
 
 const BODY_REGIONS = [
   {
@@ -114,11 +118,43 @@ const EMPTY_BM_FORM = {
   freeTextNote: '',
 };
 
+const EMPTY_NOTE_FORM = {
+  id: '',
+  createdAt: '',
+  occurredAt: '',
+  noteType: 'symptom',
+  tags: [],
+  timeUnknown: false,
+  freeTextNote: '',
+};
+
+const EMPTY_WEIGHT_FORM = {
+  id: '',
+  createdAt: '',
+  occurredAt: '',
+  weightUnit: 'lb',
+  weightValue: '',
+  freeTextNote: '',
+};
+
+const EMPTY_SLEEP_FORM = {
+  id: '',
+  createdAt: '',
+  startTime: '',
+  endTime: '',
+  durationMinutes: 480,
+  quality: 'okay',
+  freeTextNote: '',
+};
+
 function App() {
   const [view, setView] = useState(getHashView());
   const [peeEntries, setPeeEntries] = useState([]);
+  const [noteEntries, setNoteEntries] = useState([]);
   const [bruiseEntries, setBruiseEntries] = useState([]);
   const [bmEntries, setBmEntries] = useState([]);
+  const [weightEntries, setWeightEntries] = useState([]);
+  const [sleepEntries, setSleepEntries] = useState([]);
   const [activeTimer, setActiveTimer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -128,22 +164,34 @@ function App() {
     start: '',
     end: '',
   });
-  const [peeModal, setPeeModal] = useState({ open: false, mode: 'note-create', entry: null });
+  const [peeModal, setPeeModal] = useState({ open: false, mode: 'edit', entry: null });
+  const [noteModal, setNoteModal] = useState({ open: false, mode: 'create', entry: null });
   const [bmModal, setBmModal] = useState({ open: false, mode: 'create', entry: null });
+  const [weightModal, setWeightModal] = useState({ open: false, mode: 'create', entry: null });
+  const [sleepModal, setSleepModal] = useState({ open: false, mode: 'create', entry: null });
   const [bruiseForm, setBruiseForm] = useState(EMPTY_BRUISE_FORM);
   const [bruiseMode, setBruiseMode] = useState('create');
   const [importPayload, setImportPayload] = useState(null);
   const [importFeedback, setImportFeedback] = useState('');
   const [bruiseError, setBruiseError] = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
-  const [graphModal, setGraphModal] = useState({ open: false, kind: 'pee', range: 'all', selectedDate: '' });
+  const [graphModal, setGraphModal] = useState({
+    open: false,
+    kind: 'pee',
+    range: 'all',
+    selectedDate: '',
+    weightUnit: 'lb',
+  });
 
   useEffect(() => {
     async function load() {
       const data = await getAllData();
       setPeeEntries(sortByUpdatedAt(data.peeEntries));
+      setNoteEntries(sortByUpdatedAt(data.noteEntries));
       setBruiseEntries(sortByUpdatedAt(data.bruiseEntries));
       setBmEntries(sortByUpdatedAt(data.bmEntries));
+      setWeightEntries(sortByUpdatedAt(data.weightEntries));
+      setSleepEntries(sortByUpdatedAt(data.sleepEntries));
       setActiveTimer(data.peeEntries.find((entry) => entry.status === 'active') || null);
       setLoading(false);
     }
@@ -163,16 +211,66 @@ function App() {
   }, []);
 
   const savedPeeEntries = useMemo(
-    () => sortByUpdatedAt(peeEntries.filter((entry) => entry.status === 'saved')),
+    () =>
+      sortByUpdatedAt(
+        peeEntries.filter((entry) => entry.status === 'saved' && entry.entryMode !== 'note')
+      ),
     [peeEntries]
   );
 
-  const timerPeeEntries = useMemo(
-    () => savedPeeEntries.filter((entry) => entry.entryMode !== 'note'),
-    [savedPeeEntries]
+  const timerPeeEntries = useMemo(() => savedPeeEntries, [savedPeeEntries]);
+
+  const savedNoteEntries = useMemo(() => sortByUpdatedAt(noteEntries), [noteEntries]);
+  const legacyNoteEntries = useMemo(
+    () =>
+      sortByUpdatedAt(
+        peeEntries.filter((entry) => entry.status === 'saved' && entry.entryMode === 'note')
+      ),
+    [peeEntries]
+  );
+  const exportableNoteEntries = useMemo(
+    () =>
+      sortByUpdatedAt([
+        ...savedNoteEntries,
+        ...legacyNoteEntries.map((entry) => ({
+          id: entry.id,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+          occurredAt: entry.startTime || entry.createdAt,
+          entryType: 'note',
+          noteType: entry.noteType || 'pee',
+          tags: entry.tags || [],
+          timeUnknown: !entry.startTime,
+          freeTextNote: entry.freeTextNote || '',
+        })),
+      ]),
+    [savedNoteEntries, legacyNoteEntries]
   );
 
   const savedBmEntries = useMemo(() => sortByUpdatedAt(bmEntries), [bmEntries]);
+  const savedWeightEntries = useMemo(() => sortByUpdatedAt(weightEntries), [weightEntries]);
+  const savedSleepEntries = useMemo(() => sortByUpdatedAt(sleepEntries), [sleepEntries]);
+  const manualPeeEntries = useMemo(
+    () =>
+      sortByUpdatedAt(
+        [...savedNoteEntries, ...legacyNoteEntries]
+          .filter((entry) => entry.noteType === 'pee')
+          .map((entry) => ({
+            id: entry.id,
+            createdAt: entry.createdAt,
+            updatedAt: entry.updatedAt,
+            entryType: 'pee',
+            entryMode: 'manual-note',
+            startTime: entry.timeUnknown ? '' : entry.occurredAt || entry.startTime || '',
+            endTime: entry.timeUnknown ? '' : entry.occurredAt || entry.endTime || entry.startTime || '',
+            duration: null,
+            tags: entry.tags || [],
+            freeTextNote: entry.freeTextNote || '',
+            timeUnknown: entry.timeUnknown ?? !(entry.occurredAt || entry.startTime || entry.endTime),
+          })),
+      ),
+    [savedNoteEntries, legacyNoteEntries]
+  );
 
   const combinedLogEntries = useMemo(() => {
     const peeLog = savedPeeEntries.map((entry) => ({
@@ -193,19 +291,82 @@ function App() {
       logTimestamp: entry.occurredAt || entry.createdAt,
     }));
 
-    return [...peeLog, ...bmLog, ...bruiseLog].sort(
+    const weightLog = savedWeightEntries.map((entry) => ({
+      ...entry,
+      logType: 'weight',
+      logTimestamp: entry.occurredAt || entry.createdAt,
+    }));
+
+    const sleepLog = savedSleepEntries.map((entry) => ({
+      ...entry,
+      logType: 'sleep',
+      logTimestamp: getSleepEnd(entry) || getSleepStart(entry) || entry.createdAt,
+    }));
+
+    const noteLog = savedNoteEntries.map((entry) => ({
+      ...entry,
+      logType: 'note',
+      sourceStore: 'noteEntries',
+      logTimestamp: entry.occurredAt || entry.createdAt,
+    }));
+
+    const legacyNoteLog = legacyNoteEntries.map((entry) => ({
+      ...entry,
+      logType: 'note',
+      sourceStore: 'peeEntries',
+      noteType: entry.noteType || 'pee',
+      tags: entry.tags || [],
+      timeUnknown: !entry.startTime,
+      occurredAt: entry.startTime || entry.createdAt,
+      logTimestamp: entry.startTime || entry.createdAt,
+    }));
+
+    return [...peeLog, ...noteLog, ...legacyNoteLog, ...bmLog, ...weightLog, ...sleepLog, ...bruiseLog].sort(
       (a, b) => new Date(b.logTimestamp).getTime() - new Date(a.logTimestamp).getTime()
     );
-  }, [savedPeeEntries, savedBmEntries, bruiseEntries]);
+  }, [savedPeeEntries, savedNoteEntries, legacyNoteEntries, savedBmEntries, savedWeightEntries, savedSleepEntries, bruiseEntries]);
 
   const filteredLogEntries = useMemo(
     () => filterLogEntries(combinedLogEntries, historyFilters),
     [combinedLogEntries, historyFilters]
   );
 
-  const peeStats = useMemo(() => buildPeeStats(timerPeeEntries), [timerPeeEntries]);
+  const peeStats = useMemo(() => buildPeeStats([...timerPeeEntries, ...manualPeeEntries]), [timerPeeEntries, manualPeeEntries]);
   const bmStats = useMemo(() => buildBmStats(savedBmEntries), [savedBmEntries]);
+  const weightStats = useMemo(() => buildWeightStats(savedWeightEntries), [savedWeightEntries]);
+  const sleepStats = useMemo(() => buildSleepStats(savedSleepEntries), [savedSleepEntries]);
   const bruiseStats = useMemo(() => buildBruiseStats(bruiseEntries), [bruiseEntries]);
+  const graphConfig = {
+    pee: {
+      title: 'Pee entries by day',
+      entriesByDay: peeStats.entriesByDay,
+      barValueFormatter: (value) => String(Math.round(value || 0)),
+      detailFormatter: (value) => `${Math.round(value || 0)} entries`,
+    },
+    bm: {
+      title: 'BM entries by day',
+      entriesByDay: bmStats.entriesByDay,
+      barValueFormatter: (value) => String(Math.round(value || 0)),
+      detailFormatter: (value) => `${Math.round(value || 0)} entries`,
+    },
+    weight: {
+      title: 'Weight by day',
+      entriesByDay: weightStats.entriesByDay,
+      barValueFormatter: (value) => formatWeightShort(convertWeightFromKg(value, graphModal.weightUnit), graphModal.weightUnit),
+      detailFormatter: (value) => formatWeightValue(convertWeightFromKg(value, graphModal.weightUnit), graphModal.weightUnit),
+    },
+    sleep: {
+      title: 'Sleep duration by day',
+      entriesByDay: sleepStats.durationByDay,
+      barValueFormatter: (value) => formatSleepHours(value),
+      detailFormatter: (value) => formatDuration(value),
+    },
+  }[graphModal.kind] || {
+    title: 'Pee entries by day',
+    entriesByDay: peeStats.entriesByDay,
+    barValueFormatter: (value) => String(Math.round(value || 0)),
+    detailFormatter: (value) => `${Math.round(value || 0)} entries`,
+  };
 
   async function syncPeeEntries(nextEntries) {
     const sortedEntries = sortByUpdatedAt(nextEntries);
@@ -213,8 +374,20 @@ function App() {
     setActiveTimer(sortedEntries.find((entry) => entry.status === 'active') || null);
   }
 
+  function syncNoteEntries(nextEntries) {
+    setNoteEntries(sortByUpdatedAt(nextEntries));
+  }
+
   function syncBmEntries(nextEntries) {
     setBmEntries(sortByUpdatedAt(nextEntries));
+  }
+
+  function syncWeightEntries(nextEntries) {
+    setWeightEntries(sortByUpdatedAt(nextEntries));
+  }
+
+  function syncSleepEntries(nextEntries) {
+    setSleepEntries(sortByUpdatedAt(nextEntries));
   }
 
   function navigate(nextView) {
@@ -287,27 +460,23 @@ function App() {
 
   function openNoteModal() {
     const timestamp = new Date().toISOString();
-    setPeeModal({
+    setNoteModal({
       open: true,
-      mode: 'note-create',
+      mode: 'create',
       entry: {
-        id: '',
+        ...EMPTY_NOTE_FORM,
         createdAt: timestamp,
-        updatedAt: timestamp,
-        entryType: 'pee',
-        entryMode: 'note',
-        status: 'saved',
-        startTime: timestamp,
-        endTime: timestamp,
-        duration: 0,
-        tags: [],
-        freeTextNote: '',
+        occurredAt: timestamp,
       },
     });
   }
 
   function closePeeModal() {
-    setPeeModal({ open: false, mode: 'note-create', entry: null });
+    setPeeModal({ open: false, mode: 'edit', entry: null });
+  }
+
+  function closeNoteModal() {
+    setNoteModal({ open: false, mode: 'create', entry: null });
   }
 
   function openBmModal(entry = null) {
@@ -326,6 +495,52 @@ function App() {
 
   function closeBmModal() {
     setBmModal({ open: false, mode: 'create', entry: null });
+  }
+
+  function openWeightModal(entry = null) {
+    const timestamp = new Date().toISOString();
+    setWeightModal({
+      open: true,
+      mode: entry ? 'edit' : 'create',
+      entry:
+        entry || {
+          ...EMPTY_WEIGHT_FORM,
+          createdAt: timestamp,
+          occurredAt: timestamp,
+        },
+    });
+  }
+
+  function closeWeightModal() {
+    setWeightModal({ open: false, mode: 'create', entry: null });
+  }
+
+  function openSleepModal(entry = null) {
+    const defaults = createDefaultSleepTiming();
+    setSleepModal({
+      open: true,
+      mode: entry ? 'edit' : 'create',
+      entry:
+        entry
+          ? {
+              ...EMPTY_SLEEP_FORM,
+              ...entry,
+              startTime: getSleepStart(entry),
+              endTime: getSleepEnd(entry),
+              durationMinutes: getSleepDurationMinutes(entry),
+            }
+          : {
+          ...EMPTY_SLEEP_FORM,
+          createdAt: defaults.endTime,
+          startTime: defaults.startTime,
+          endTime: defaults.endTime,
+          durationMinutes: defaults.durationMinutes,
+        },
+    });
+  }
+
+  function closeSleepModal() {
+    setSleepModal({ open: false, mode: 'create', entry: null });
   }
 
   async function handleSavePeeEntry(formEntry) {
@@ -362,7 +577,7 @@ function App() {
         ...normalized,
         id: makeId('pee'),
         createdAt: timestamp,
-        entryMode: normalized.entryMode || 'note',
+        entryMode: normalized.entryMode || 'timer',
       };
       nextEntries = [...peeEntries, entryToPersist];
     }
@@ -381,6 +596,56 @@ function App() {
       tone: 'danger',
       action: { type: 'discard-pee-draft', id },
     });
+  }
+
+  async function handleSaveNoteEntry(formEntry) {
+    const timestamp = new Date().toISOString();
+
+    if (noteModal.mode === 'legacy-edit') {
+      const updatedLegacyEntry = {
+        ...formEntry,
+        updatedAt: timestamp,
+        noteType: formEntry.noteType || 'pee',
+        tags: formEntry.tags || [],
+        timeUnknown: Boolean(formEntry.timeUnknown),
+        entryMode: 'note',
+        status: 'saved',
+        startTime: formEntry.timeUnknown ? '' : formEntry.occurredAt || formEntry.startTime || timestamp,
+        endTime: formEntry.timeUnknown ? '' : formEntry.occurredAt || formEntry.endTime || timestamp,
+        duration: 0,
+      };
+
+      const nextEntries = peeEntries.map((entry) =>
+        entry.id === updatedLegacyEntry.id ? { ...entry, ...updatedLegacyEntry } : entry
+      );
+
+      await saveEntry('peeEntries', nextEntries.find((entry) => entry.id === updatedLegacyEntry.id));
+      await syncPeeEntries(nextEntries);
+      closeNoteModal();
+      return;
+    }
+
+    const entry = {
+      ...formEntry,
+      id: noteModal.mode === 'edit' ? formEntry.id : makeId('note'),
+      createdAt: noteModal.mode === 'edit' ? formEntry.createdAt : timestamp,
+      updatedAt: timestamp,
+      occurredAt: formEntry.timeUnknown ? '' : formEntry.occurredAt || timestamp,
+      entryType: 'note',
+      noteType: formEntry.noteType || 'symptom',
+      tags: formEntry.tags || [],
+      timeUnknown: Boolean(formEntry.timeUnknown),
+    };
+
+    await saveEntry('noteEntries', entry);
+
+    const nextEntries =
+      noteModal.mode === 'edit'
+        ? noteEntries.map((current) => (current.id === entry.id ? entry : current))
+        : [...noteEntries, entry];
+
+    syncNoteEntries(nextEntries);
+    closeNoteModal();
   }
 
   async function handleSaveBmEntry(formEntry) {
@@ -403,6 +668,59 @@ function App() {
 
     syncBmEntries(nextEntries);
     closeBmModal();
+  }
+
+  async function handleSaveWeightEntry(formEntry) {
+    const timestamp = new Date().toISOString();
+    const numericWeight = Number(formEntry.weightValue);
+    const entry = {
+      ...formEntry,
+      id: weightModal.mode === 'edit' ? formEntry.id : makeId('weight'),
+      createdAt: weightModal.mode === 'edit' ? formEntry.createdAt : timestamp,
+      updatedAt: timestamp,
+      occurredAt: formEntry.occurredAt || timestamp,
+      entryType: 'weight',
+      weightUnit: formEntry.weightUnit || 'lb',
+      weightValue: Number.isFinite(numericWeight) ? numericWeight : 0,
+    };
+
+    await saveEntry('weightEntries', entry);
+
+    const nextEntries =
+      weightModal.mode === 'edit'
+        ? weightEntries.map((current) => (current.id === entry.id ? entry : current))
+        : [...weightEntries, entry];
+
+    syncWeightEntries(nextEntries);
+    closeWeightModal();
+  }
+
+  async function handleSaveSleepEntry(formEntry) {
+    const timestamp = new Date().toISOString();
+    const endTime = formEntry.endTime || timestamp;
+    const durationMinutes = clampDurationMinutes(formEntry.durationMinutes);
+    const startTime = formEntry.startTime || subtractMinutes(endTime, durationMinutes);
+    const entry = {
+      ...formEntry,
+      id: sleepModal.mode === 'edit' ? formEntry.id : makeId('sleep'),
+      createdAt: sleepModal.mode === 'edit' ? formEntry.createdAt : timestamp,
+      updatedAt: timestamp,
+      startTime,
+      endTime,
+      durationMinutes,
+      quality: formEntry.quality || 'okay',
+      entryType: 'sleep',
+    };
+
+    await saveEntry('sleepEntries', entry);
+
+    const nextEntries =
+      sleepModal.mode === 'edit'
+        ? sleepEntries.map((current) => (current.id === entry.id ? entry : current))
+        : [...sleepEntries, entry];
+
+    syncSleepEntries(nextEntries);
+    closeSleepModal();
   }
 
   function openBruiseCreate() {
@@ -459,8 +777,34 @@ function App() {
       return;
     }
 
+    if (item.logType === 'note') {
+      setNoteModal({
+        open: true,
+        mode: item.sourceStore === 'peeEntries' ? 'legacy-edit' : 'edit',
+        entry: {
+          ...EMPTY_NOTE_FORM,
+          ...item,
+          occurredAt: item.occurredAt || item.logTimestamp || item.createdAt,
+          noteType: item.noteType || 'symptom',
+          tags: item.tags || [],
+          timeUnknown: item.timeUnknown ?? !(item.occurredAt || item.startTime || item.endTime),
+        },
+      });
+      return;
+    }
+
     if (item.logType === 'bm') {
       openBmModal(item);
+      return;
+    }
+
+    if (item.logType === 'weight') {
+      openWeightModal(item);
+      return;
+    }
+
+    if (item.logType === 'sleep') {
+      openSleepModal(item);
       return;
     }
 
@@ -492,12 +836,15 @@ function App() {
     const payload = {
       exportedAt: new Date().toISOString(),
       peeEntries,
+      noteEntries,
       bmEntries,
+      weightEntries,
+      sleepEntries,
       bruiseEntries,
     };
 
     downloadFile(
-      `pee-bruise-backup-${dateStamp()}.json`,
+      `pb2track-backup-${dateStamp()}.json`,
       JSON.stringify(payload, null, 2),
       'application/json'
     );
@@ -507,15 +854,27 @@ function App() {
     const rows =
       storeName === 'peeEntries'
         ? savedPeeEntries
+        : storeName === 'noteEntries'
+          ? exportableNoteEntries
         : storeName === 'bmEntries'
           ? savedBmEntries
+        : storeName === 'weightEntries'
+          ? savedWeightEntries
+        : storeName === 'sleepEntries'
+          ? savedSleepEntries
           : bruiseEntries;
     const csv = convertToCsv(rows, storeName);
     const fileName =
       storeName === 'peeEntries'
         ? `pee-entries-${dateStamp()}.csv`
+        : storeName === 'noteEntries'
+          ? `note-entries-${dateStamp()}.csv`
         : storeName === 'bmEntries'
           ? `bm-entries-${dateStamp()}.csv`
+        : storeName === 'weightEntries'
+          ? `weight-entries-${dateStamp()}.csv`
+        : storeName === 'sleepEntries'
+          ? `sleep-entries-${dateStamp()}.csv`
         : `bruise-entries-${dateStamp()}.csv`;
     downloadFile(fileName, csv, 'text/csv;charset=utf-8;');
   }
@@ -530,11 +889,21 @@ function App() {
       const rawText = await file.text();
       const parsed = JSON.parse(rawText);
       const nextPeeEntries = Array.isArray(parsed.peeEntries) ? parsed.peeEntries : [];
+      const nextNoteEntries = Array.isArray(parsed.noteEntries) ? parsed.noteEntries : [];
       const nextBmEntries = Array.isArray(parsed.bmEntries) ? parsed.bmEntries : [];
+      const nextWeightEntries = Array.isArray(parsed.weightEntries) ? parsed.weightEntries : [];
+      const nextSleepEntries = Array.isArray(parsed.sleepEntries) ? parsed.sleepEntries : [];
       const nextBruiseEntries = Array.isArray(parsed.bruiseEntries) ? parsed.bruiseEntries : [];
-      setImportPayload({ peeEntries: nextPeeEntries, bmEntries: nextBmEntries, bruiseEntries: nextBruiseEntries });
+      setImportPayload({
+        peeEntries: nextPeeEntries,
+        noteEntries: nextNoteEntries,
+        bmEntries: nextBmEntries,
+        weightEntries: nextWeightEntries,
+        sleepEntries: nextSleepEntries,
+        bruiseEntries: nextBruiseEntries,
+      });
       setImportFeedback(
-        `Loaded ${nextPeeEntries.length} pee entries, ${nextBmEntries.length} BM entries, and ${nextBruiseEntries.length} bruise entries.`
+        `Loaded ${nextPeeEntries.length} Pee entries, ${nextNoteEntries.length} Note entries, ${nextBmEntries.length} BM entries, ${nextWeightEntries.length} Weight entries, ${nextSleepEntries.length} Sleep entries, and ${nextBruiseEntries.length} Bruise entries.`
       );
     } catch {
       setImportPayload(null);
@@ -550,7 +919,7 @@ function App() {
     if (mode === 'replace') {
       openConfirmModal({
         title: 'Replace existing local data?',
-        message: 'All current pee and bruise entries on this device will be replaced by the imported backup.',
+        message: 'All current Pee, Note, BM, Weight, Sleep, and Bruise entries on this device will be replaced by the imported backup.',
         cancelLabel: 'Cancel',
         confirmLabel: 'Replace data',
         tone: 'danger',
@@ -560,19 +929,31 @@ function App() {
     }
 
     let nextPeeEntries = [];
+    let nextNoteEntries = [];
     let nextBmEntries = [];
+    let nextWeightEntries = [];
+    let nextSleepEntries = [];
     let nextBruiseEntries = [];
 
     if (mode === 'replace-confirmed') {
       await clearStore('peeEntries');
+      await clearStore('noteEntries');
       await clearStore('bmEntries');
+      await clearStore('weightEntries');
+      await clearStore('sleepEntries');
       await clearStore('bruiseEntries');
       nextPeeEntries = sortByUpdatedAt(importPayload.peeEntries);
+      nextNoteEntries = sortByUpdatedAt(importPayload.noteEntries);
       nextBmEntries = sortByUpdatedAt(importPayload.bmEntries);
+      nextWeightEntries = sortByUpdatedAt(importPayload.weightEntries);
+      nextSleepEntries = sortByUpdatedAt(importPayload.sleepEntries);
       nextBruiseEntries = sortByUpdatedAt(importPayload.bruiseEntries);
     } else {
       nextPeeEntries = mergeEntries(peeEntries, importPayload.peeEntries);
+      nextNoteEntries = mergeEntries(noteEntries, importPayload.noteEntries);
       nextBmEntries = mergeEntries(bmEntries, importPayload.bmEntries);
+      nextWeightEntries = mergeEntries(weightEntries, importPayload.weightEntries);
+      nextSleepEntries = mergeEntries(sleepEntries, importPayload.sleepEntries);
       nextBruiseEntries = mergeEntries(bruiseEntries, importPayload.bruiseEntries);
     }
 
@@ -584,13 +965,28 @@ function App() {
       await saveEntries('bmEntries', nextBmEntries);
     }
 
+    if (nextWeightEntries.length > 0) {
+      await saveEntries('weightEntries', nextWeightEntries);
+    }
+
+    if (nextSleepEntries.length > 0) {
+      await saveEntries('sleepEntries', nextSleepEntries);
+    }
+
+    if (nextNoteEntries.length > 0) {
+      await saveEntries('noteEntries', nextNoteEntries);
+    }
+
     if (nextBruiseEntries.length > 0) {
       await saveEntries('bruiseEntries', nextBruiseEntries);
     }
 
     await syncPeeEntries(nextPeeEntries);
+    syncNoteEntries(nextNoteEntries);
     syncBmEntries(nextBmEntries);
-    setBruiseEntries(nextBruiseEntries);
+    syncWeightEntries(nextWeightEntries);
+    syncSleepEntries(nextSleepEntries);
+    setBruiseEntries(sortByUpdatedAt(nextBruiseEntries));
     setImportFeedback(mode === 'replace-confirmed' ? 'Local data replaced.' : 'Imported backup merged.');
   }
 
@@ -619,17 +1015,29 @@ function App() {
       const storeName =
         action.entry.logType === 'pee'
           ? 'peeEntries'
+          : action.entry.logType === 'note'
+            ? action.entry.sourceStore || 'noteEntries'
           : action.entry.logType === 'bm'
             ? 'bmEntries'
+          : action.entry.logType === 'weight'
+            ? 'weightEntries'
+          : action.entry.logType === 'sleep'
+            ? 'sleepEntries'
             : 'bruiseEntries';
       await deleteEntry(storeName, action.entry.id);
 
       if (storeName === 'peeEntries') {
         await syncPeeEntries(peeEntries.filter((entry) => entry.id !== action.entry.id));
+      } else if (storeName === 'noteEntries') {
+        syncNoteEntries(noteEntries.filter((entry) => entry.id !== action.entry.id));
       } else if (storeName === 'bmEntries') {
         syncBmEntries(bmEntries.filter((entry) => entry.id !== action.entry.id));
+      } else if (storeName === 'weightEntries') {
+        syncWeightEntries(weightEntries.filter((entry) => entry.id !== action.entry.id));
+      } else if (storeName === 'sleepEntries') {
+        syncSleepEntries(sleepEntries.filter((entry) => entry.id !== action.entry.id));
       } else {
-        setBruiseEntries(bruiseEntries.filter((entry) => entry.id !== action.entry.id));
+        setBruiseEntries(sortByUpdatedAt(bruiseEntries.filter((entry) => entry.id !== action.entry.id)));
       }
 
       return;
@@ -673,6 +1081,8 @@ function App() {
             onCancelTimer={handleCancelTimer}
             onOpenNote={openNoteModal}
             onOpenBm={() => openBmModal()}
+            onOpenWeight={() => openWeightModal()}
+            onOpenSleep={() => openSleepModal()}
             onOpenBruise={openBruiseCreate}
             recentEntries={combinedLogEntries.slice(0, 4)}
           />
@@ -701,19 +1111,30 @@ function App() {
           <InsightsView
             peeStats={peeStats}
             bmStats={bmStats}
+            weightStats={weightStats}
+            sleepStats={sleepStats}
             bruiseStats={bruiseStats}
             onOpenPeeGraph={(selectedDate = '') =>
-              setGraphModal({ open: true, kind: 'pee', range: 'all', selectedDate })
+              setGraphModal({ open: true, kind: 'pee', range: 'all', selectedDate, weightUnit: 'lb' })
             }
             onOpenBmGraph={(selectedDate = '') =>
-              setGraphModal({ open: true, kind: 'bm', range: 'all', selectedDate })
+              setGraphModal({ open: true, kind: 'bm', range: 'all', selectedDate, weightUnit: 'lb' })
+            }
+            onOpenWeightGraph={(selectedDate = '') =>
+              setGraphModal({ open: true, kind: 'weight', range: 'all', selectedDate, weightUnit: 'lb' })
+            }
+            onOpenSleepGraph={(selectedDate = '') =>
+              setGraphModal({ open: true, kind: 'sleep', range: 'all', selectedDate, weightUnit: 'lb' })
             }
           />
         )}
         {view === 'export' && (
           <ExportView
             peeCount={savedPeeEntries.length}
+            noteCount={exportableNoteEntries.length}
             bmCount={savedBmEntries.length}
+            weightCount={savedWeightEntries.length}
+            sleepCount={savedSleepEntries.length}
             bruiseCount={bruiseEntries.length}
             importFeedback={importFeedback}
             importPayload={importPayload}
@@ -729,6 +1150,8 @@ function App() {
           <PrintView
             peeStats={peeStats}
             bmStats={bmStats}
+            weightStats={weightStats}
+            sleepStats={sleepStats}
             bruiseStats={bruiseStats}
             entries={combinedLogEntries}
             onBack={() => navigate('export')}
@@ -760,11 +1183,35 @@ function App() {
         />
       )}
 
+      {noteModal.open && (
+        <NoteEntryModal
+          modal={noteModal}
+          onClose={closeNoteModal}
+          onSave={handleSaveNoteEntry}
+        />
+      )}
+
       {bmModal.open && (
         <BMEntryModal
           modal={bmModal}
           onClose={closeBmModal}
           onSave={handleSaveBmEntry}
+        />
+      )}
+
+      {weightModal.open && (
+        <WeightEntryModal
+          modal={weightModal}
+          onClose={closeWeightModal}
+          onSave={handleSaveWeightEntry}
+        />
+      )}
+
+      {sleepModal.open && (
+        <SleepEntryModal
+          modal={sleepModal}
+          onClose={closeSleepModal}
+          onSave={handleSaveSleepEntry}
         />
       )}
 
@@ -778,10 +1225,12 @@ function App() {
 
       {graphModal.open && (
         <PeeGraphModal
-          title={graphModal.kind === 'bm' ? 'BM entries by day' : 'Pee entries by day'}
-          entriesByDay={graphModal.kind === 'bm' ? bmStats.entriesByDay : peeStats.entriesByDay}
+          title={graphConfig.title}
+          entriesByDay={graphConfig.entriesByDay}
+          barValueFormatter={graphConfig.barValueFormatter}
+          detailFormatter={graphConfig.detailFormatter}
           modal={graphModal}
-          onClose={() => setGraphModal({ open: false, kind: 'pee', range: 'all', selectedDate: '' })}
+          onClose={() => setGraphModal({ open: false, kind: 'pee', range: 'all', selectedDate: '', weightUnit: 'lb' })}
           onChange={(nextModal) => setGraphModal((current) => ({ ...current, ...nextModal }))}
         />
       )}
@@ -797,6 +1246,8 @@ function HomeView({
   onCancelTimer,
   onOpenNote,
   onOpenBm,
+  onOpenWeight,
+  onOpenSleep,
   onOpenBruise,
   recentEntries,
 }) {
@@ -831,7 +1282,7 @@ function HomeView({
         <div className="action-grid">
           <button type="button" className="action-card" onClick={onOpenNote}>
             <span className="action-title">Add Note</span>
-            <span className="action-copy">Save a note-only entry.</span>
+            <span className="action-copy">Track a symptom, intake, or pee-related note.</span>
           </button>
           <button type="button" className="action-card" onClick={onOpenBruise}>
             <span className="action-title">Add Bruise</span>
@@ -840,6 +1291,14 @@ function HomeView({
           <button type="button" className="action-card" onClick={onOpenBm}>
             <span className="action-title">Add BM</span>
             <span className="action-copy">Log a bowel movement.</span>
+          </button>
+          <button type="button" className="action-card" onClick={onOpenWeight}>
+            <span className="action-title">Add Weight</span>
+            <span className="action-copy">Record a weight data point.</span>
+          </button>
+          <button type="button" className="action-card" onClick={onOpenSleep}>
+            <span className="action-title">Add Sleep</span>
+            <span className="action-copy">Track duration, quality, and notes.</span>
           </button>
         </div>
       </section>
@@ -1085,7 +1544,10 @@ function LogView({ filters, entries, onChangeFilters, onEdit, onDelete }) {
               {[
                 ['all', 'All'],
                 ['pee', 'Pee only'],
+                ['note', 'Notes only'],
                 ['bm', 'BM only'],
+                ['weight', 'Weight only'],
+                ['sleep', 'Sleep only'],
                 ['bruise', 'Bruise only'],
               ].map(([value, label]) => (
                 <button
@@ -1184,6 +1646,15 @@ function LogView({ filters, entries, onChangeFilters, onEdit, onDelete }) {
                   ))}
                 </div>
               )}
+              {entry.logType === 'note' && entry.tags?.length > 0 && (
+                <div className="tag-row">
+                  {entry.tags.map((tag) => (
+                    <span key={tag} className="tag-pill">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
               {entry.logType === 'bruise' && entry.colorTags?.length > 0 && (
                 <div className="tag-row">
                   {entry.colorTags.map((tag) => (
@@ -1213,7 +1684,17 @@ function LogView({ filters, entries, onChangeFilters, onEdit, onDelete }) {
   );
 }
 
-function InsightsView({ peeStats, bmStats, bruiseStats, onOpenPeeGraph, onOpenBmGraph }) {
+function InsightsView({
+  peeStats,
+  bmStats,
+  weightStats,
+  sleepStats,
+  bruiseStats,
+  onOpenPeeGraph,
+  onOpenBmGraph,
+  onOpenWeightGraph,
+  onOpenSleepGraph,
+}) {
   return (
     <section className="content-stack">
       <section className="panel">
@@ -1241,6 +1722,7 @@ function InsightsView({ peeStats, bmStats, bruiseStats, onOpenPeeGraph, onOpenBm
               actionLabel="Open graph"
               onAction={() => onOpenPeeGraph('')}
               onItemClick={(date) => onOpenPeeGraph(date)}
+              sortMode="key-desc"
             />
           </>
         )}
@@ -1271,6 +1753,68 @@ function InsightsView({ peeStats, bmStats, bruiseStats, onOpenPeeGraph, onOpenBm
               actionLabel="Open graph"
               onAction={() => onOpenBmGraph('')}
               onItemClick={(date) => onOpenBmGraph(date)}
+              sortMode="key-desc"
+            />
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <h2>Weight insights</h2>
+          <p>Track recorded weight over time with daily values and summary stats.</p>
+        </div>
+        {weightStats.totalCount < 1 ? (
+          <p className="empty-state">Not enough data yet</p>
+        ) : (
+          <>
+            <div className="stats-grid">
+              <StatCard label="Total count" value={String(weightStats.totalCount)} />
+              <StatCard label="Latest" value={formatWeightValue(convertWeightFromKg(weightStats.latestValueKg, 'lb'), 'lb')} />
+              <StatCard label="Average" value={formatWeightValue(convertWeightFromKg(weightStats.averageValueKg, 'lb'), 'lb')} />
+              <StatCard label="Lowest" value={formatWeightValue(convertWeightFromKg(weightStats.lowestValueKg, 'lb'), 'lb')} />
+              <StatCard label="Highest" value={formatWeightValue(convertWeightFromKg(weightStats.highestValueKg, 'lb'), 'lb')} />
+            </div>
+            <MetricList
+              title="Weight by day"
+              data={weightStats.entriesByDay}
+              emptyLabel="No daily weight values yet."
+              actionLabel="Open graph"
+              onAction={() => onOpenWeightGraph('')}
+              onItemClick={(date) => onOpenWeightGraph(date)}
+              sortMode="key-desc"
+              valueFormatter={(value) => formatWeightValue(convertWeightFromKg(value, 'lb'), 'lb')}
+            />
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <h2>Sleep insights</h2>
+          <p>Track sleep duration, quality, and daily patterns.</p>
+        </div>
+        {sleepStats.totalCount < 1 ? (
+          <p className="empty-state">Not enough data yet</p>
+        ) : (
+          <>
+            <div className="stats-grid">
+              <StatCard label="Total count" value={String(sleepStats.totalCount)} />
+              <StatCard label="Average duration" value={<span className="time-code">{formatDuration(sleepStats.averageDuration)}</span>} />
+              <StatCard label="Median duration" value={<span className="time-code">{formatDuration(sleepStats.medianDuration)}</span>} />
+              <StatCard label="Shortest" value={<span className="time-code">{formatDuration(sleepStats.shortest)}</span>} />
+              <StatCard label="Longest" value={<span className="time-code">{formatDuration(sleepStats.longest)}</span>} />
+            </div>
+            <MetricList title="Quality frequency" data={sleepStats.qualityFrequency} emptyLabel="No sleep quality data yet." />
+            <MetricList
+              title="Sleep duration by day"
+              data={sleepStats.durationByDay}
+              emptyLabel="No daily sleep durations yet."
+              actionLabel="Open graph"
+              onAction={() => onOpenSleepGraph('')}
+              onItemClick={(date) => onOpenSleepGraph(date)}
+              sortMode="key-desc"
+              valueFormatter={(value) => formatDuration(value)}
             />
           </>
         )}
@@ -1294,7 +1838,7 @@ function InsightsView({ peeStats, bmStats, bruiseStats, onOpenPeeGraph, onOpenBm
             </div>
             <MetricList title="Region distribution" data={bruiseStats.regionDistribution} emptyLabel="No region data yet." />
             <MetricList title="Color frequency" data={bruiseStats.colorFrequency} emptyLabel="No bruise color tags yet." />
-            <MetricList title="Frequency over time" data={bruiseStats.frequencyOverTime} emptyLabel="No time distribution yet." />
+            <MetricList title="Frequency over time" data={bruiseStats.frequencyOverTime} emptyLabel="No time distribution yet." sortMode="key-desc" />
           </>
         )}
       </section>
@@ -1304,7 +1848,10 @@ function InsightsView({ peeStats, bmStats, bruiseStats, onOpenPeeGraph, onOpenBm
 
 function ExportView({
   peeCount,
+  noteCount,
   bmCount,
+  weightCount,
+  sleepCount,
   bruiseCount,
   importFeedback,
   importPayload,
@@ -1323,9 +1870,12 @@ function ExportView({
         </div>
 
         <div className="stats-grid">
-          <StatCard label="Saved pee entries" value={String(peeCount)} />
+          <StatCard label="Saved Pee entries" value={String(peeCount)} />
+          <StatCard label="Saved Note entries" value={String(noteCount)} />
           <StatCard label="Saved BM entries" value={String(bmCount)} />
-          <StatCard label="Bruise entries" value={String(bruiseCount)} />
+          <StatCard label="Saved Weight entries" value={String(weightCount)} />
+          <StatCard label="Saved Sleep entries" value={String(sleepCount)} />
+          <StatCard label="Saved Bruise entries" value={String(bruiseCount)} />
         </div>
 
         <div className="button-stack">
@@ -1333,13 +1883,22 @@ function ExportView({
             Export JSON backup
           </button>
           <button type="button" className="secondary-button" onClick={() => onDownloadCsv('peeEntries')}>
-            Export pee CSV
+            Export Pee CSV
+          </button>
+          <button type="button" className="secondary-button" onClick={() => onDownloadCsv('noteEntries')}>
+            Export Note CSV
           </button>
           <button type="button" className="secondary-button" onClick={() => onDownloadCsv('bmEntries')}>
             Export BM CSV
           </button>
+          <button type="button" className="secondary-button" onClick={() => onDownloadCsv('weightEntries')}>
+            Export Weight CSV
+          </button>
+          <button type="button" className="secondary-button" onClick={() => onDownloadCsv('sleepEntries')}>
+            Export Sleep CSV
+          </button>
           <button type="button" className="secondary-button" onClick={() => onDownloadCsv('bruiseEntries')}>
-            Export bruise CSV
+            Export Bruise CSV
           </button>
           <button type="button" className="ghost-button strong" onClick={onOpenPrint}>
             Open printable report
@@ -1389,7 +1948,7 @@ function HelpView({ onBack }) {
       <section className="panel">
         <div className="section-heading">
           <h2>How to use PB²Track</h2>
-          <p>Use the home screen for fast entry, then review details in Log, Insights, or Export.</p>
+          <p>Use the home screen to add timers, notes, bruises, BM entries, weight entries, or sleep entries, then review them in Log, Insights, or Export.</p>
         </div>
 
         <div className="help-stack">
@@ -1399,8 +1958,8 @@ function HelpView({ onBack }) {
           </article>
 
           <article className="help-card">
-            <h3>Add note, bruise, or BM entries</h3>
-            <p>Use `Add Note`, `Add Bruise`, or `Add BM` from Home. Each flow stays local and only saves when you tap `Save`.</p>
+            <h3>Add note, bruise, BM, weight, or sleep entries</h3>
+            <p>Use `Add Note`, `Add Bruise`, `Add BM`, `Add Weight`, or `Add Sleep` from Home. Notes support symptom, general, and pee-specific quick selectors. Weight defaults to lb with optional kg. Sleep uses a compact timing card with a tap-to-edit bottom sheet.</p>
           </article>
 
           <article className="help-card">
@@ -1410,7 +1969,7 @@ function HelpView({ onBack }) {
 
           <article className="help-card">
             <h3>View patterns in Insights</h3>
-            <p>Insights shows counts, durations, tag frequency, and daily graphs for pee and BM entries, plus bruise trends.</p>
+            <p>Insights shows counts, durations, tag frequency, weight trends, sleep quality patterns, and daily graphs for Pee, BM, Weight, and Sleep entries, plus Bruise trends. Weight math is normalized internally and the graph can switch between lb and kg display.</p>
           </article>
 
           <article className="help-card">
@@ -1434,7 +1993,9 @@ function HelpView({ onBack }) {
   );
 }
 
-function PrintView({ peeStats, bmStats, bruiseStats, entries, onBack }) {
+function PrintView({ peeStats, bmStats, weightStats, sleepStats, bruiseStats, entries, onBack }) {
+  const noteCount = entries.filter((entry) => entry.logType === 'note').length;
+
   return (
     <section className="print-report">
       <div className="print-toolbar">
@@ -1456,8 +2017,11 @@ function PrintView({ peeStats, bmStats, bruiseStats, entries, onBack }) {
         <h2>Summary</h2>
         <div className="stats-grid">
           <StatCard label="Pee entries" value={String(peeStats.totalCount)} />
+          <StatCard label="Note entries" value={String(noteCount)} />
           <StatCard label="Avg pee duration" value={<span className="time-code">{formatDuration(peeStats.averageDuration || 0)}</span>} />
           <StatCard label="BM entries" value={String(bmStats.totalCount)} />
+          <StatCard label="Weight entries" value={String(weightStats.totalCount)} />
+          <StatCard label="Sleep entries" value={String(sleepStats.totalCount)} />
           <StatCard label="Bruise entries" value={String(bruiseStats.totalCount)} />
           <StatCard label="Unique bruise regions" value={String(bruiseStats.uniqueRegions || 0)} />
         </div>
@@ -1510,7 +2074,7 @@ function PeeEntryModal({ modal, onClose, onSave, onDiscard }) {
   }
 
   const isTimerStop = modal.mode === 'timer-stop';
-  const heading = modal.mode === 'edit' ? 'Edit entry' : isTimerStop ? 'Save pee entry' : 'Add note';
+  const heading = modal.mode === 'edit' ? 'Edit pee entry' : 'Save pee entry';
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
@@ -1587,6 +2151,179 @@ function PeeEntryModal({ modal, onClose, onSave, onDiscard }) {
             </button>
           )}
           <button type="button" className="primary-button" onClick={() => onSave(form)}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoteEntryModal({ modal, onClose, onSave }) {
+  const [form, setForm] = useState(modal.entry);
+
+  useEffect(() => {
+    setForm(modal.entry);
+  }, [modal.entry]);
+
+  if (!form) {
+    return null;
+  }
+
+  const isEdit = modal.mode === 'edit' || modal.mode === 'legacy-edit';
+  const quickTags =
+    form.noteType === 'pee'
+      ? PEE_TAGS
+      : form.noteType === 'general'
+        ? GENERAL_NOTE_TAGS
+        : SYMPTOM_TAGS;
+  const canSave = form.noteType === 'pee' ? form.timeUnknown || Boolean(form.occurredAt) : true;
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-sheet">
+        <div className="section-heading">
+          <h2>{isEdit ? 'Edit note' : 'Add note'}</h2>
+          <p>Track a symptom, a general note like water or medication, or a pee-related note.</p>
+        </div>
+
+        <div className="field">
+          <span>Type</span>
+          <div className="segmented wrap">
+            {NOTE_TYPES.map((noteType) => (
+              <button
+                key={noteType}
+                type="button"
+                className={form.noteType === noteType ? 'segment active' : 'segment'}
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    noteType,
+                    tags:
+                      current.noteType === noteType
+                        ? current.tags
+                        : [],
+                    timeUnknown:
+                      current.noteType === noteType ? current.timeUnknown : noteType === 'pee',
+                    occurredAt:
+                      noteType === 'pee' && current.noteType !== 'pee' ? '' : current.occurredAt,
+                  }))
+                }
+              >
+                {capitalize(noteType)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {form.noteType === 'pee' ? (
+          <>
+            <div className="field">
+              <span>Pee time</span>
+              <div className="segmented wrap">
+                {[
+                  ['na', 'N/A'],
+                  ['known', 'Known'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={
+                      (value === 'na' ? form.timeUnknown : !form.timeUnknown) ? 'segment active' : 'segment'
+                    }
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        timeUnknown: value === 'na',
+                        occurredAt: value === 'na' ? '' : current.occurredAt || new Date().toISOString(),
+                      }))
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {!form.timeUnknown && (
+              <label className="field">
+                <span>Occurred at</span>
+                <input
+                  type="datetime-local"
+                  value={toInputDateTime(form.occurredAt)}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      occurredAt: fromInputDateTime(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+            )}
+
+            <div className="field">
+              <span>Duration</span>
+              <p className="selection-pill">N/A</p>
+            </div>
+          </>
+        ) : (
+          <label className="field">
+            <span>Occurred at</span>
+            <input
+              type="datetime-local"
+              value={toInputDateTime(form.occurredAt)}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  occurredAt: fromInputDateTime(event.target.value),
+                }))
+              }
+            />
+          </label>
+        )}
+
+        <TagSelector
+          label={
+            form.noteType === 'pee'
+              ? 'Pee tags'
+              : form.noteType === 'general'
+                ? 'Quick selectors'
+                : 'Symptom quick selectors'
+          }
+          options={quickTags}
+          selected={form.tags || []}
+          onToggle={(tag) =>
+            setForm((current) => ({
+              ...current,
+              tags: toggleTag(current.tags || [], tag),
+            }))
+          }
+        />
+
+        <label className="field">
+          <span>Note</span>
+          <textarea
+            rows="4"
+            value={form.freeTextNote}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                freeTextNote: event.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <div className="button-row">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => onSave(form)}
+            disabled={!canSave}
+          >
             Save
           </button>
         </div>
@@ -1680,6 +2417,345 @@ function BMEntryModal({ modal, onClose, onSave }) {
   );
 }
 
+function WeightEntryModal({ modal, onClose, onSave }) {
+  const [form, setForm] = useState(modal.entry);
+
+  useEffect(() => {
+    setForm({ ...EMPTY_WEIGHT_FORM, ...modal.entry });
+  }, [modal.entry]);
+
+  if (!form) {
+    return null;
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-sheet">
+        <div className="section-heading">
+          <h2>{modal.mode === 'edit' ? 'Edit Weight entry' : 'Add Weight'}</h2>
+          <p>Record a weight data point with an optional note.</p>
+        </div>
+
+        <label className="field">
+          <span>Recorded at</span>
+          <input
+            type="datetime-local"
+            value={toInputDateTime(form.occurredAt)}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                occurredAt: fromInputDateTime(event.target.value),
+              }))
+            }
+          />
+        </label>
+
+        <label className="field">
+          <span>Unit</span>
+          <div className="segmented wrap">
+            {['lb', 'kg'].map((unit) => (
+              <button
+                key={unit}
+                type="button"
+                className={form.weightUnit === unit ? 'segment active' : 'segment'}
+                onClick={() => setForm((current) => ({ ...current, weightUnit: unit }))}
+              >
+                {unit}
+              </button>
+            ))}
+          </div>
+        </label>
+
+        <label className="field">
+          <span>{`Weight (${form.weightUnit || 'lb'})`}</span>
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            value={form.weightValue}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                weightValue: event.target.value,
+              }))
+            }
+          />
+        </label>
+
+        <label className="field">
+          <span>Note</span>
+          <textarea
+            rows="4"
+            value={form.freeTextNote}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, freeTextNote: event.target.value }))
+            }
+          />
+        </label>
+
+        <div className="button-row">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="primary-button" onClick={() => onSave(form)}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SleepEntryModal({ modal, onClose, onSave }) {
+  const [form, setForm] = useState(modal.entry);
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      ...EMPTY_SLEEP_FORM,
+      ...modal.entry,
+      startTime: getSleepStart(modal.entry),
+      endTime: getSleepEnd(modal.entry),
+      durationMinutes: getSleepDurationMinutes(modal.entry),
+    });
+    setEditorOpen(false);
+  }, [modal.entry]);
+
+  if (!form) {
+    return null;
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-sheet">
+        <div className="section-heading">
+          <h2>{modal.mode === 'edit' ? 'Edit Sleep entry' : 'Add Sleep'}</h2>
+          <p>Track sleep or naps without having to edit two full date fields unless you want to.</p>
+        </div>
+
+        <button type="button" className="sleep-summary-card" onClick={() => setEditorOpen(true)}>
+          <span className="sleep-summary-label">Sleep timing</span>
+          <strong>{formatSleepSummary(form)}</strong>
+          <span className="sleep-summary-meta">Tap to adjust duration or when it ended.</span>
+        </button>
+
+        <div className="field">
+          <span>Quality</span>
+          <div className="segmented wrap">
+            {SLEEP_QUALITY_OPTIONS.map((quality) => (
+              <button
+                key={quality}
+                type="button"
+                className={form.quality === quality ? 'segment active' : 'segment'}
+                onClick={() => setForm((current) => ({ ...current, quality }))}
+              >
+                {capitalize(quality)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="field">
+          <span>Note</span>
+          <textarea
+            rows="4"
+            value={form.freeTextNote}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, freeTextNote: event.target.value }))
+            }
+          />
+        </label>
+
+        <div className="button-row">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="primary-button" onClick={() => onSave(form)}>
+            Save
+          </button>
+        </div>
+      </div>
+
+      {editorOpen && (
+        <SleepTimingEditor
+          value={form}
+          onCancel={() => setEditorOpen(false)}
+          onClear={() =>
+            setForm((current) => ({
+              ...current,
+              ...createDefaultSleepTiming(),
+            }))
+          }
+          onSave={(nextTiming) => {
+            setForm((current) => ({
+              ...current,
+              ...nextTiming,
+            }));
+            setEditorOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SleepTimingEditor({ value, onCancel, onClear, onSave }) {
+  const [draft, setDraft] = useState(() => createSleepDraft(value));
+
+  useEffect(() => {
+    setDraft(createSleepDraft(value));
+  }, [value]);
+
+  const summary = formatSleepSummary(draft);
+
+  function updateDurationMinutes(durationMinutes) {
+    const nextDurationMinutes = clampDurationMinutes(durationMinutes);
+    setDraft((current) => ({
+      ...current,
+      durationMinutes: nextDurationMinutes,
+      startTime: subtractMinutes(current.endTime, nextDurationMinutes),
+    }));
+  }
+
+  function updateEndTime(endTime, endedWhen = 'custom') {
+    setDraft((current) => ({
+      ...current,
+      endedWhen,
+      endTime,
+      startTime: subtractMinutes(endTime, current.durationMinutes),
+    }));
+  }
+
+  return (
+    <div className="sheet-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-sheet sheet-panel">
+        <div className="section-heading">
+          <h3>Edit sleep timing</h3>
+          <p>{summary}</p>
+        </div>
+
+        <div className="field">
+          <span>Quick duration</span>
+          <div className="segmented wrap">
+            {[
+              [15, '15m'],
+              [30, '30m'],
+              [45, '45m'],
+              [60, '1h'],
+              [90, '1.5h'],
+              [120, '2h'],
+              [240, '4h'],
+              [360, '6h'],
+              [480, '8h'],
+              [600, '10h'],
+            ].map(([minutes, label]) => (
+              <button
+                key={label}
+                type="button"
+                className={draft.durationMinutes === minutes ? 'segment active' : 'segment'}
+                onClick={() => updateDurationMinutes(minutes)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <span>Ended when</span>
+          <div className="segmented wrap">
+            {[
+              ['now', 0, 'Now'],
+              ['15m', 15, '15m ago'],
+              ['30m', 30, '30m ago'],
+              ['1h', 60, '1h ago'],
+              ['2h', 120, '2h ago'],
+              ['custom', null, 'Custom'],
+            ].map(([key, offsetMinutes, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={draft.endedWhen === key ? 'segment active' : 'segment'}
+                onClick={() =>
+                  key === 'custom'
+                    ? setDraft((current) => ({ ...current, endedWhen: 'custom' }))
+                    : updateEndTime(new Date(Date.now() - offsetMinutes * 60 * 1000).toISOString(), key)
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <span>Exact input</span>
+          <div className="duration-inputs">
+            <label className="field compact-field">
+              <span>Hours</span>
+              <input
+                type="number"
+                min="0"
+                value={Math.floor(draft.durationMinutes / 60)}
+                onChange={(event) => {
+                  const hours = Math.max(0, Number(event.target.value) || 0);
+                  const minutes = draft.durationMinutes % 60;
+                  updateDurationMinutes(hours * 60 + minutes);
+                }}
+              />
+            </label>
+            <label className="field compact-field">
+              <span>Minutes</span>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={draft.durationMinutes % 60}
+                onChange={(event) => {
+                  const hours = Math.floor(draft.durationMinutes / 60);
+                  const minutes = Math.min(59, Math.max(0, Number(event.target.value) || 0));
+                  updateDurationMinutes(hours * 60 + minutes);
+                }}
+              />
+            </label>
+          </div>
+
+          <label className="field">
+            <span>Exact end date/time</span>
+            <input
+              type="datetime-local"
+              value={toInputDateTime(draft.endTime)}
+              onChange={(event) => updateEndTime(fromInputDateTime(event.target.value), 'custom')}
+            />
+          </label>
+        </div>
+
+        <div className="button-row">
+          <button type="button" className="ghost-button" onClick={onClear}>
+            Clear
+          </button>
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() =>
+              onSave({
+                startTime: draft.startTime,
+                endTime: draft.endTime,
+                durationMinutes: clampDurationMinutes(draft.durationMinutes),
+              })
+            }
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmModal({ modal, onClose, onConfirm }) {
   const cancelLabel = modal.cancelLabel || 'Cancel';
 
@@ -1708,10 +2784,19 @@ function ConfirmModal({ modal, onClose, onConfirm }) {
   );
 }
 
-function PeeGraphModal({ title, entriesByDay, modal, onClose, onChange }) {
+function PeeGraphModal({
+  title,
+  entriesByDay,
+  barValueFormatter = (value) => String(value),
+  detailFormatter = (value) => String(value),
+  modal,
+  onClose,
+  onChange,
+}) {
   const sortedDates = Object.keys(entriesByDay).sort((a, b) => new Date(a) - new Date(b));
   const latestDate = sortedDates[sortedDates.length - 1] || '';
-  const filterDate = modal.selectedDate || latestDate;
+  const activeDate = modal.selectedDate || latestDate;
+  const filterDate = activeDate;
   const filteredEntries = sortedDates
     .filter((date) => {
       if (modal.range === '7') {
@@ -1730,7 +2815,28 @@ function PeeGraphModal({ title, entriesByDay, modal, onClose, onChange }) {
     })
     .map((date) => ({ date, count: entriesByDay[date] }));
 
-  const maxCount = Math.max(...filteredEntries.map((item) => item.count), 1);
+  const chartWidth = 720;
+  const chartHeight = 260;
+  const paddingX = 22;
+  const paddingY = 20;
+  const plotWidth = chartWidth - paddingX * 2;
+  const plotHeight = chartHeight - paddingY * 2;
+  const minCount = filteredEntries.length > 0 ? Math.min(...filteredEntries.map((item) => item.count)) : 0;
+  const maxCount = filteredEntries.length > 0 ? Math.max(...filteredEntries.map((item) => item.count)) : 1;
+  const chartMin = minCount > 0 && maxCount !== minCount ? minCount : 0;
+  const chartRange = Math.max(maxCount - chartMin, 1);
+  const chartPoints = filteredEntries.map((item, index) => {
+    const x =
+      filteredEntries.length === 1
+        ? chartWidth / 2
+        : paddingX + (index / (filteredEntries.length - 1)) * plotWidth;
+    const y = chartHeight - paddingY - ((item.count - chartMin) / chartRange) * plotHeight;
+    return { ...item, x, y };
+  });
+  const linePoints = chartPoints.map((point) => `${point.x},${point.y}`).join(' ');
+  const areaPoints = chartPoints.length
+    ? `${paddingX},${chartHeight - paddingY} ${linePoints} ${chartPoints[chartPoints.length - 1].x},${chartHeight - paddingY}`
+    : '';
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
@@ -1764,6 +2870,24 @@ function PeeGraphModal({ title, entriesByDay, modal, onClose, onChange }) {
           ))}
         </div>
 
+        {modal.kind === 'weight' && (
+          <div className="field">
+            <span>Display unit</span>
+            <div className="segmented wrap">
+              {['lb', 'kg'].map((unit) => (
+                <button
+                  key={unit}
+                  type="button"
+                  className={modal.weightUnit === unit ? 'segment active' : 'segment'}
+                  onClick={() => onChange({ weightUnit: unit })}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <label className="field">
           <span>Specific date</span>
           <input
@@ -1782,27 +2906,54 @@ function PeeGraphModal({ title, entriesByDay, modal, onClose, onChange }) {
           {filteredEntries.length === 0 ? (
             <p className="empty-state">No entries are available for the selected range.</p>
           ) : (
-            <div className="chart-bars" aria-label={`${title} chart`}>
-              {filteredEntries.map((item) => (
-                <button
-                  key={item.date}
-                  type="button"
-                  className={item.date === modal.selectedDate ? 'chart-bar active' : 'chart-bar'}
-                  style={{ '--bar-height': `${Math.max(16, (item.count / maxCount) * 100)}%` }}
-                  onClick={() => onChange({ selectedDate: item.date })}
-                >
-                  <span className="chart-bar-fill" />
-                  <span className="chart-bar-value">{item.count}</span>
-                  <span className="chart-bar-label">{shortDate(item.date)}</span>
-                </button>
-              ))}
+            <div className="chart-surface" aria-label={`${title} chart`}>
+              <svg className="chart-svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-hidden="true">
+                <defs>
+                  <linearGradient id="chart-area-fill" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="rgba(144, 169, 183, 0.28)" />
+                    <stop offset="100%" stopColor="rgba(144, 169, 183, 0.03)" />
+                  </linearGradient>
+                </defs>
+                <line
+                  x1={paddingX}
+                  y1={chartHeight - paddingY}
+                  x2={chartWidth - paddingX}
+                  y2={chartHeight - paddingY}
+                  className="chart-axis-line"
+                />
+                {areaPoints && <polygon points={areaPoints} className="chart-area" />}
+                {linePoints && <polyline points={linePoints} className="chart-line" />}
+                {chartPoints.map((point) => (
+                  <circle
+                    key={point.date}
+                    cx={point.x}
+                    cy={point.y}
+                    r={point.date === activeDate ? 8 : 5}
+                    className={point.date === activeDate ? 'chart-point active' : 'chart-point'}
+                  />
+                ))}
+              </svg>
+
+              <div className="chart-chip-row">
+                {chartPoints.map((point) => (
+                  <button
+                    key={point.date}
+                    type="button"
+                    className={point.date === activeDate ? 'chart-chip active' : 'chart-chip'}
+                    onClick={() => onChange({ selectedDate: point.date })}
+                  >
+                    <span>{shortDate(point.date)}</span>
+                    <strong>{barValueFormatter(point.count)}</strong>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        {modal.selectedDate && (
+        {activeDate && (
           <div className="selection-pill detail-pill">
-            {formatGraphDate(modal.selectedDate)}: {entriesByDay[modal.selectedDate] || 0} entries
+            {formatGraphDate(activeDate)}: {detailFormatter(entriesByDay[activeDate] || 0)}
           </div>
         )}
 
@@ -1845,8 +2996,14 @@ function StatCard({ label, value }) {
   );
 }
 
-function MetricList({ title, data, emptyLabel, actionLabel, onAction, onItemClick }) {
-  const entries = Object.entries(data || {}).sort((a, b) => b[1] - a[1]);
+function MetricList({ title, data, emptyLabel, actionLabel, onAction, onItemClick, sortMode = 'value-desc', valueFormatter }) {
+  const entries = Object.entries(data || {}).sort((a, b) => {
+    if (sortMode === 'key-desc') {
+      return String(b[0]).localeCompare(String(a[0]));
+    }
+
+    return Number(b[1]) - Number(a[1]);
+  });
 
   return (
     <section className="metric-list">
@@ -1867,12 +3024,12 @@ function MetricList({ title, data, emptyLabel, actionLabel, onAction, onItemClic
               {onItemClick ? (
                 <button type="button" className="metric-item-button" onClick={() => onItemClick(label, value)}>
                   <span>{label}</span>
-                  <strong>{value}</strong>
+                  <strong>{valueFormatter ? valueFormatter(value) : value}</strong>
                 </button>
               ) : (
                 <>
                   <span>{label}</span>
-                  <strong>{value}</strong>
+                  <strong>{valueFormatter ? valueFormatter(value) : value}</strong>
                 </>
               )}
             </li>
@@ -1897,9 +3054,15 @@ function buildPeeStats(entries) {
     };
   }
 
-  const durations = entries.map((entry) => Number(entry.duration) || 0).sort((a, b) => a - b);
-  const totalDuration = durations.reduce((sum, value) => sum + value, 0);
-  const entriesByDay = groupCounts(entries, (entry) => formatDateOnly(entry.endTime || entry.startTime));
+  const durationEntries = entries
+    .filter((entry) => entry.duration !== null && entry.duration !== undefined && Number.isFinite(Number(entry.duration)))
+    .map((entry) => Number(entry.duration))
+    .sort((a, b) => a - b);
+  const datedEntries = entries.filter((entry) => Boolean(entry.endTime || entry.startTime || entry.occurredAt));
+  const totalDuration = durationEntries.reduce((sum, value) => sum + value, 0);
+  const entriesByDay = groupCounts(datedEntries, (entry) =>
+    formatDateOnly(entry.endTime || entry.startTime || entry.occurredAt)
+  );
   const tagFrequency = {};
 
   entries.forEach((entry) => {
@@ -1910,11 +3073,11 @@ function buildPeeStats(entries) {
 
   return {
     totalCount: entries.length,
-    averageDuration: Math.round(totalDuration / entries.length),
-    medianDuration: median(durations),
-    shortest: durations[0],
-    longest: durations[durations.length - 1],
-    frequencyPerDay: entries.length / Math.max(1, Object.keys(entriesByDay).length),
+    averageDuration: durationEntries.length ? Math.round(totalDuration / durationEntries.length) : 0,
+    medianDuration: median(durationEntries),
+    shortest: durationEntries[0] || 0,
+    longest: durationEntries[durationEntries.length - 1] || 0,
+    frequencyPerDay: datedEntries.length / Math.max(1, Object.keys(entriesByDay).length),
     tagFrequency,
     entriesByDay,
   };
@@ -1947,6 +3110,72 @@ function buildBmStats(entries) {
     tagFrequency,
     sizeFrequency,
     entriesByDay,
+  };
+}
+
+function buildWeightStats(entries) {
+  if (entries.length === 0) {
+    return {
+      totalCount: 0,
+      latestValueKg: 0,
+      averageValueKg: 0,
+      lowestValueKg: 0,
+      highestValueKg: 0,
+      entriesByDay: {},
+    };
+  }
+
+  const values = entries
+    .map((entry) => convertWeightToKg(entry.weightValue, entry.weightUnit || 'lb'))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+  const latestEntry = [...entries].sort(
+    (a, b) =>
+      new Date(b.occurredAt || b.createdAt || 0).getTime() - new Date(a.occurredAt || a.createdAt || 0).getTime()
+  )[0];
+
+  return {
+    totalCount: entries.length,
+    latestValueKg: convertWeightToKg(latestEntry?.weightValue, latestEntry?.weightUnit || 'lb'),
+    averageValueKg: average(values),
+    lowestValueKg: values[0] || 0,
+    highestValueKg: values[values.length - 1] || 0,
+    entriesByDay: buildLatestValueByDay(
+      entries,
+      (entry) => entry.occurredAt || entry.createdAt,
+      (entry) => convertWeightToKg(entry.weightValue, entry.weightUnit || 'lb')
+    ),
+  };
+}
+
+function buildSleepStats(entries) {
+  if (entries.length === 0) {
+    return {
+      totalCount: 0,
+      averageDuration: 0,
+      medianDuration: 0,
+      shortest: 0,
+      longest: 0,
+      qualityFrequency: {},
+      durationByDay: {},
+    };
+  }
+
+  const durations = entries.map((entry) => getSleepDurationMs(entry)).sort((a, b) => a - b);
+  const totalDuration = durations.reduce((sum, value) => sum + value, 0);
+
+  return {
+    totalCount: entries.length,
+    averageDuration: Math.round(totalDuration / entries.length),
+    medianDuration: median(durations),
+    shortest: durations[0] || 0,
+    longest: durations[durations.length - 1] || 0,
+    qualityFrequency: groupCounts(entries, (entry) => capitalize(entry.quality || 'okay')),
+    durationByDay: sumValuesByDay(
+      entries,
+      (entry) => getSleepEnd(entry) || getSleepStart(entry) || entry.createdAt,
+      (entry) => getSleepDurationMs(entry)
+    ),
   };
 }
 
@@ -2037,11 +3266,17 @@ function convertToCsv(entries, storeName) {
   }
 
   const fields =
-    storeName === 'peeEntries'
-      ? ['id', 'createdAt', 'updatedAt', 'entryMode', 'startTime', 'endTime', 'duration', 'tags', 'freeTextNote']
+      storeName === 'peeEntries'
+        ? ['id', 'createdAt', 'updatedAt', 'entryMode', 'startTime', 'endTime', 'duration', 'tags', 'freeTextNote']
+      : storeName === 'noteEntries'
+        ? ['id', 'createdAt', 'updatedAt', 'occurredAt', 'noteType', 'tags', 'timeUnknown', 'freeTextNote']
       : storeName === 'bmEntries'
         ? ['id', 'createdAt', 'updatedAt', 'occurredAt', 'size', 'tags', 'freeTextNote']
-      : ['id', 'createdAt', 'updatedAt', 'observedAt', 'bodySide', 'regionKey', 'regionType', 'limbType', 'size', 'colorTags', 'tenderness', 'causeKnown', 'causeDescription', 'status', 'note'];
+        : storeName === 'weightEntries'
+          ? ['id', 'createdAt', 'updatedAt', 'occurredAt', 'weightUnit', 'weightValue', 'freeTextNote']
+        : storeName === 'sleepEntries'
+          ? ['id', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'durationMinutes', 'quality', 'freeTextNote']
+        : ['id', 'createdAt', 'updatedAt', 'observedAt', 'bodySide', 'regionKey', 'regionType', 'limbType', 'size', 'colorTags', 'tenderness', 'causeKnown', 'causeDescription', 'status', 'note'];
 
   return [
     fields.join(','),
@@ -2065,6 +3300,32 @@ function groupCounts(items, getKey) {
   }, {});
 }
 
+function buildLatestValueByDay(items, getDate, getValue) {
+  const values = {};
+
+  items.forEach((item) => {
+    const timestamp = getDate(item) || item.createdAt;
+    const dateKey = formatDateOnly(timestamp);
+    const value = Number(getValue(item)) || 0;
+    const time = new Date(timestamp || 0).getTime();
+    const current = values[dateKey];
+
+    if (!current || time >= current.time) {
+      values[dateKey] = { time, value };
+    }
+  });
+
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.value]));
+}
+
+function sumValuesByDay(items, getDate, getValue) {
+  return items.reduce((values, item) => {
+    const dateKey = formatDateOnly(getDate(item) || item.createdAt);
+    values[dateKey] = (values[dateKey] || 0) + (Number(getValue(item)) || 0);
+    return values;
+  }, {});
+}
+
 function median(values) {
   if (values.length === 0) {
     return 0;
@@ -2076,13 +3337,39 @@ function median(values) {
     : values[middle];
 }
 
+function average(values) {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
 function entryTitle(entry) {
   if (entry.logType === 'bruise') {
     return `Bruise · ${capitalize(entry.bodySide)} ${displayRegion(entry)}`;
   }
 
+  if (entry.logType === 'note') {
+    return entry.noteType === 'pee' && entry.timeUnknown
+      ? 'Pee note · N/A time'
+      : `${capitalize(entry.noteType || 'symptom')} note`;
+  }
+
   if (entry.logType === 'bm') {
     return `BM entry · ${capitalize(entry.size)}`;
+  }
+
+  if (entry.logType === 'weight') {
+    return `Weight · ${formatWeightValue(entry.weightValue, entry.weightUnit || 'lb')}`;
+  }
+
+  if (entry.logType === 'sleep') {
+    return (
+      <>
+        Sleep · <span className="time-code inline-time">{formatDuration(getSleepDurationMs(entry))}</span>
+      </>
+    );
   }
 
   if (entry.entryMode === 'note') {
@@ -2121,6 +3408,31 @@ function entrySummary(entry, options = {}) {
     return entry.tags?.length ? entry.tags.join(', ') : 'No tags';
   }
 
+  if (entry.logType === 'note') {
+    if (entry.freeTextNote) {
+      return entry.freeTextNote;
+    }
+
+    if (entry.noteType === 'pee' && entry.timeUnknown) {
+      return 'Manual pee note with no recorded time.';
+    }
+
+    return `${capitalize(entry.noteType || 'symptom')} note.`;
+  }
+
+  if (entry.logType === 'weight') {
+    return entry.freeTextNote || 'Recorded weight entry.';
+  }
+
+  if (entry.logType === 'sleep') {
+    const parts = [capitalize(entry.quality || 'okay')];
+    parts.unshift(formatSleepSummary(entry));
+    if (entry.freeTextNote) {
+      parts.push(entry.freeTextNote);
+    }
+    return parts.join(' · ');
+  }
+
   if (entry.entryMode === 'note') {
     return entry.freeTextNote || 'Note-only entry.';
   }
@@ -2141,6 +3453,67 @@ function displayRegion(entry) {
   return region ? region.label : 'Unknown region';
 }
 
+function getSleepStart(entry) {
+  return entry?.startTime || entry?.sleepStart || '';
+}
+
+function getSleepEnd(entry) {
+  return entry?.endTime || entry?.sleepEnd || '';
+}
+
+function getSleepDurationMinutes(entry) {
+  if (entry?.durationMinutes !== undefined && entry?.durationMinutes !== null) {
+    return clampDurationMinutes(entry.durationMinutes);
+  }
+
+  if (entry?.duration !== undefined && entry?.duration !== null) {
+    return clampDurationMinutes(Math.round(Number(entry.duration || 0) / (60 * 1000)));
+  }
+
+  const startTime = getSleepStart(entry);
+  const endTime = getSleepEnd(entry);
+  if (!startTime || !endTime) {
+    return 0;
+  }
+
+  return clampDurationMinutes((new Date(endTime).getTime() - new Date(startTime).getTime()) / (60 * 1000));
+}
+
+function getSleepDurationMs(entry) {
+  return getSleepDurationMinutes(entry) * 60 * 1000;
+}
+
+function clampDurationMinutes(value) {
+  return Math.max(0, Math.round(Number(value) || 0));
+}
+
+function subtractMinutes(value, minutes) {
+  return new Date(new Date(value).getTime() - clampDurationMinutes(minutes) * 60 * 1000).toISOString();
+}
+
+function createDefaultSleepTiming() {
+  const endTime = new Date().toISOString();
+  const durationMinutes = 8 * 60;
+  return {
+    startTime: subtractMinutes(endTime, durationMinutes),
+    endTime,
+    durationMinutes,
+  };
+}
+
+function createSleepDraft(entry) {
+  const defaults = createDefaultSleepTiming();
+
+  return {
+    ...defaults,
+    ...entry,
+    startTime: getSleepStart(entry) || defaults.startTime,
+    endTime: getSleepEnd(entry) || defaults.endTime,
+    durationMinutes: getSleepDurationMinutes(entry) || defaults.durationMinutes,
+    endedWhen: 'custom',
+  };
+}
+
 function toggleTag(tags, tag) {
   return tags.includes(tag) ? tags.filter((item) => item !== tag) : [...tags, tag];
 }
@@ -2158,6 +3531,59 @@ function formatDuration(durationMs) {
   return `${String(minutes).padStart(2, '0')}m:${String(seconds).padStart(2, '0')}s`;
 }
 
+function formatMinutesLabel(totalMinutes) {
+  const minutes = clampDurationMinutes(totalMinutes);
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (hours > 0 && remainder > 0) {
+    return `${hours}h ${remainder}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h`;
+  }
+
+  return `${remainder}m`;
+}
+
+function formatSleepSummary(entry) {
+  const startTime = getSleepStart(entry);
+  const endTime = getSleepEnd(entry);
+  const durationMinutes = getSleepDurationMinutes(entry);
+
+  if (!startTime || !endTime) {
+    return `Sleep: duration ${formatMinutesLabel(durationMinutes)}`;
+  }
+
+  return `Sleep: ${formatClockTime(startTime)} -> ${formatClockTime(endTime)} (${formatMinutesLabel(durationMinutes)})`;
+}
+
+function convertWeightToKg(value, unit = 'lb') {
+  const numericValue = Number(value) || 0;
+  return unit === 'kg' ? numericValue : numericValue * 0.45359237;
+}
+
+function convertWeightFromKg(valueKg, unit = 'lb') {
+  const numericValue = Number(valueKg) || 0;
+  return unit === 'kg' ? numericValue : numericValue / 0.45359237;
+}
+
+function formatWeightValue(value, unit = 'lb') {
+  return `${formatWeightShort(value, unit)} ${unit}`;
+}
+
+function formatWeightShort(value, unit = 'lb') {
+  const numericValue = Number(value) || 0;
+  const precision = unit === 'kg' ? 1 : 1;
+  return numericValue % 1 === 0 ? numericValue.toFixed(0) : numericValue.toFixed(precision);
+}
+
+function formatSleepHours(durationMs) {
+  const hours = (Number(durationMs) || 0) / (60 * 60 * 1000);
+  return `${hours.toFixed(hours >= 10 ? 0 : 1)}h`;
+}
+
 function formatDateTime(value) {
   if (!value) {
     return 'Unknown time';
@@ -2167,6 +3593,17 @@ function formatDateTime(value) {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function formatClockTime(value) {
+  if (!value) {
+    return '--';
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(value));
