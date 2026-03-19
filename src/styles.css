@@ -123,8 +123,9 @@ textarea:focus-visible {
 .print-section h2,
 .metric-list h3 {
   margin: 0;
-  font-family: "Baskerville", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-  letter-spacing: -0.035em;
+  font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", "Trebuchet MS", sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 .eyebrow {
@@ -344,7 +345,9 @@ textarea:focus-visible {
 .action-title,
 .entry-title {
   display: block;
+  font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", "Trebuchet MS", sans-serif;
   font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .action-copy {
@@ -368,7 +371,9 @@ textarea:focus-visible {
 
 .help-card h3 {
   margin: 0 0 0.35rem;
-  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", "Trebuchet MS", sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .help-card p {

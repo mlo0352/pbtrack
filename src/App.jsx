@@ -372,10 +372,15 @@ function App() {
     closePeeModal();
   }
 
-  async function handleDiscardPeeDraft(id) {
-    await deleteEntry('peeEntries', id);
-    await syncPeeEntries(peeEntries.filter((entry) => entry.id !== id));
-    closePeeModal();
+  function handleDiscardPeeDraft(id) {
+    openConfirmModal({
+      title: 'Discard pee draft?',
+      message: 'This stopped timer entry will be removed and cannot be recovered.',
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Discard draft',
+      tone: 'danger',
+      action: { type: 'discard-pee-draft', id },
+    });
   }
 
   async function handleSaveBmEntry(formEntry) {
@@ -600,6 +605,13 @@ function App() {
     if (action.type === 'cancel-timer') {
       await deleteEntry('peeEntries', action.id);
       await syncPeeEntries(peeEntries.filter((entry) => entry.id !== action.id));
+      return;
+    }
+
+    if (action.type === 'discard-pee-draft') {
+      await deleteEntry('peeEntries', action.id);
+      await syncPeeEntries(peeEntries.filter((entry) => entry.id !== action.id));
+      closePeeModal();
       return;
     }
 
