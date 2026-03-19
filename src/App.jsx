@@ -544,9 +544,8 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Local-first log</p>
-            <h1>Pee & Bruise Tracker</h1>
+            <h1>P&amp;BT</h1>
           </div>
-          <p className="topbar-note">Stored only on this device.</p>
         </header>
       )}
 
@@ -1237,7 +1236,7 @@ function PrintView({ peeStats, bruiseStats, entries, onBack }) {
 
       <header className="print-header panel">
         <p className="eyebrow">Printable report</p>
-        <h1>Pee & Bruise Tracker Summary</h1>
+        <h1>P&amp;BT Summary</h1>
         <p>{formatDateTime(new Date().toISOString())}</p>
       </header>
 
