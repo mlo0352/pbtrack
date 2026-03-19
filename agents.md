@@ -1,4 +1,4 @@
-# Agents.md - P&BT (Pee & Bruise Tracker)
+# Agents.md - PB²Track
 
 ## Overview
 
@@ -23,8 +23,8 @@ There is no backend. All user data is stored locally in IndexedDB on the current
 ## Current Product State
 
 ### App Name / UI Copy
-- In-app title: `P&BT`
-- Print title: `P&BT Summary`
+- In-app title: `PB²Track`
+- Print title: `PB²Track Summary`
 - The top bar no longer repeats that data is local-only
 - The export page still shows the safety notice:
   - `Your data is stored only on this device. Export regularly to avoid data loss.`

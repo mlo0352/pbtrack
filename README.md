@@ -1,4 +1,4 @@
-# PBTrack
+# PB²Track
 
 Local-first pee and bruise tracker built for mobile Safari.
 

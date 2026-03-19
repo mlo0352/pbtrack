@@ -1376,7 +1376,7 @@ function HelpView({ onBack }) {
     <section className="content-stack">
       <section className="panel">
         <div className="section-heading">
-          <h2>How to use P&amp;BT</h2>
+          <h2>How to use PB²Track</h2>
           <p>Use the home screen for fast entry, then review details in Log, Insights, or Export.</p>
         </div>
 
@@ -1408,7 +1408,7 @@ function HelpView({ onBack }) {
 
           <article className="help-card">
             <h3>Your data is local only</h3>
-            <p>P&amp;BT has no backend and no cloud sync. Entries live in IndexedDB on this device unless you export them yourself.</p>
+            <p>PB²Track has no backend and no cloud sync. Entries live in IndexedDB on this device unless you export them yourself.</p>
           </article>
         </div>
 
@@ -1436,7 +1436,7 @@ function PrintView({ peeStats, bmStats, bruiseStats, entries, onBack }) {
 
       <header className="print-header panel">
         <p className="eyebrow">Printable report</p>
-        <h1>P&amp;BT Summary</h1>
+        <h1>PB²Track Summary</h1>
         <p>{formatDateTime(new Date().toISOString())}</p>
       </header>
 
