@@ -375,7 +375,6 @@ textarea {
 
 .selection-pill,
 .tag-pill,
-.entry-badge,
 .detail-pill {
   display: inline-flex;
   align-items: center;
@@ -388,7 +387,6 @@ textarea {
 }
 
 .tag-pill,
-.entry-badge,
 .detail-pill {
   color: rgba(39, 39, 39, 0.84);
   font-size: 0.9rem;

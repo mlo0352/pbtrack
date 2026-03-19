@@ -1046,7 +1046,6 @@ function LogView({ filters, entries, onChangeFilters, onEdit, onDelete }) {
                   <p className="entry-title">{entryTitle(entry)}</p>
                   <p className="entry-meta">{formatDateTime(entry.logTimestamp)}</p>
                 </div>
-                <span className="entry-badge">{entry.logType === 'pee' ? 'Pee' : 'Bruise'}</span>
               </div>
               <p className="entry-summary">{entrySummary(entry)}</p>
               {entry.logType === 'pee' && entry.tags?.length > 0 && (
@@ -1263,7 +1262,6 @@ function PrintView({ peeStats, bruiseStats, entries, onBack }) {
                     <p className="entry-title">{entryTitle(entry)}</p>
                     <p className="entry-meta">{formatDateTime(entry.logTimestamp)}</p>
                   </div>
-                  <span className="entry-badge">{entry.logType === 'pee' ? 'Pee' : 'Bruise'}</span>
                 </div>
                 <p className="entry-summary">{entrySummary(entry)}</p>
               </article>
@@ -1394,7 +1392,7 @@ function ConfirmModal({ modal, onClose, onConfirm }) {
 
         <div className="button-row">
           <button type="button" className="secondary-button" onClick={onClose}>
-            Back
+            Cancel
           </button>
           <button
             type="button"
@@ -1509,7 +1507,7 @@ function PeeGraphModal({ entriesByDay, modal, onClose, onChange }) {
 
         <div className="button-row">
           <button type="button" className="secondary-button" onClick={onClose}>
-            Close
+            Cancel
           </button>
         </div>
       </div>

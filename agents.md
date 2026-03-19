@@ -1,171 +1,209 @@
-# Agents.md – Pee & Bruise Tracker (Local-First Web App)
+# Agents.md - P&BT (Pee & Bruise Tracker)
 
 ## Overview
-This project is a mobile-first, local-first web application designed for iPhone Safari usage. It allows a user to:
-- Track urination events via a timer
-- Log associated notes and symptoms
-- Log bruises using a body map
-- View logs and analytics
-- Export data (CSV, JSON, printable view)
 
-No backend or database is used. All data is stored locally using IndexedDB.
+This repository now contains a working mobile-first, local-first web app built for iPhone Safari and static hosting.
+
+The app currently supports:
+- Pee timer tracking with explicit save
+- Quick note-only pee entries
+- Bruise logging with a front/back SVG body map
+- Log filtering, editing, and deletion
+- Pee and bruise insights
+- Pee entries-by-day chart modal
+- CSV export, JSON backup export, JSON import
+- Printable report view
+- GitHub Pages deployment via GitHub Actions
+
+There is no backend. All user data is stored locally in IndexedDB on the current device.
 
 ---
 
-## Core Principles
-- Local-first (no server, no cloud)
-- Privacy-first (no automatic data sharing)
-- Extremely fast interaction (2 taps for core flow)
-- Explicit save (no autosave)
-- Mobile-first UX
+## Current Product State
+
+### App Name / UI Copy
+- In-app title: `P&BT`
+- Print title: `P&BT Summary`
+- The top bar no longer repeats that data is local-only
+- The export page still shows the safety notice:
+  - `Your data is stored only on this device. Export regularly to avoid data loss.`
+
+### Core Behavior
+- Explicit save only
+- No autosave for finished entries
+- Timer drafts persist across reloads
+- Destructive actions use in-app confirmation modals, not system alerts/confirms
+- Log cards expose direct `Edit` and `Delete` actions
+- Entry-type bubbles were removed from log cards because the entry titles already identify the type
 
 ---
 
 ## Tech Stack
-- React (lightweight setup)
-- IndexedDB (via wrapper like idb)
-- Plain CSS or minimal framework
-- Hosted on GitHub Pages
+
+- React
+- Vite
+- IndexedDB via `idb`
+- Plain CSS
+- GitHub Pages deployment through GitHub Actions
 
 ---
 
-## App Structure
+## Important Files
 
-### Pages / Views
-1. Home (default)
-2. Pee Entry Modal
-3. Bruise Entry Page
-4. Log / History Page
-5. Insights Page
-6. Export / Import Page
-7. Printable Report View
+### App Logic
+- `src/App.jsx`
+  - Main app shell
+  - View routing by hash
+  - Timer flow
+  - Pee modal
+  - Bruise entry page
+  - Log page
+  - Insights page
+  - Export/import page
+  - Print view
+  - Confirmation modal
+  - Pee graph modal
+  - Analytics helpers
 
----
+### Persistence
+- `src/db.js`
+  - IndexedDB setup
+  - `peeEntries` store
+  - `bruiseEntries` store
+  - CRUD helpers
 
-## Home Screen
+### Styling
+- `src/styles.css`
+  - Mobile-first layout
+  - Palette-driven UI
+  - Modal styling
+  - Chart styling
+  - Print styling
 
-### Primary UI
-- Large centered button:
-  - Default: "Start Timer"
-  - When active: "Stop Timer"
+### Boot / Build
+- `src/main.jsx`
+- `index.html`
+- `vite.config.js`
+- `package.json`
 
-### Timer State
-- Show elapsed time while running
-- Show subtle status: "Timer running"
-- Provide "Cancel" option while active
-
-### Secondary Actions
-- Add Note
-- Add Bruise
-- View Log
-- Insights
-- Export
-
----
-
-## Pee Tracking Flow
-
-### Start
-- Tap "Start Timer"
-- Save start timestamp in IndexedDB
-
-### Running State
-- Display elapsed time (live updating)
-
-### Stop
-- Tap "Stop Timer"
-- Open Pee Entry Modal
-
-### Pee Entry Fields
-- startTime
-- endTime
-- duration
-- tags (multi-select):
-  - dark
-  - cloudy
-  - blood
-  - burning
-  - pain
-  - weak stream
-  - urgent
-  - other
-- freeTextNote
-
-### Actions
-- Save → persist entry
-- Discard → delete temp record
+### Deployment
+- `.github/workflows/deploy-pages.yml`
+  - Builds on push to `main`
+  - Uploads `dist/`
+  - Deploys to GitHub Pages
 
 ---
 
-## Timer Persistence
-- If page reloads while timer is active:
-  - timer resumes using stored startTime
+## IndexedDB Model
+
+Only two stores are used:
+- `peeEntries`
+- `bruiseEntries`
+
+### Pee Entry Shape
+Each pee entry includes:
+- `id`
+- `createdAt`
+- `updatedAt`
+- `entryType`
+- `entryMode`
+  - `timer` or `note`
+- `status`
+  - `active` or `saved`
+- `startTime`
+- `endTime`
+- `duration`
+- `tags`
+- `freeTextNote`
+
+### Bruise Entry Shape
+Each bruise entry includes:
+- `id`
+- `createdAt`
+- `updatedAt`
+- `entryType`
+- `observedAt`
+- `bodySide`
+- `regionKey`
+- `regionType`
+- `limbType`
+- `size`
+- `colorTags`
+- `tenderness`
+- `causeKnown`
+- `causeDescription`
+- `status`
+- `note`
+
+### Active Timer Persistence
+There is no separate timer store.
+An active timer is saved as a `peeEntries` record with:
+- `entryMode: timer`
+- `status: active`
+
+When the timer is stopped and saved, that same record is converted to `status: saved`.
+If the timer is canceled, the draft record is deleted.
 
 ---
 
-## Bruise Tracking
+## Views / Screens
 
-### UI
-- Vitruvian-style human silhouette (front/back toggle)
-- SVG-based clickable regions
+### 1. Home
+Current behavior:
+- Large primary start/stop button
+- Live elapsed timer display while active
+- `Cancel` available while timer is active
+- Quick actions:
+  - Add Note
+  - Add Bruise
+  - View Log
+  - Insights
+  - Export
+- Recent activity list
 
-### Regions
-Simplified structure:
-- head (front/back)
-- torso (front/back)
-- limbs:
-  - arm
-  - hand
-  - leg
-  - foot
-(each with front/back context)
+### 2. Pee Entry Modal
+Used for:
+- Saving a stopped timer
+- Editing an existing pee entry
+- Creating a note-only pee entry
 
-### Selection
-- Tap region to select
-- Highlight selected areas
+Fields:
+- Start time
+- End time
+- Duration
+- Tags
+- Note
 
-### Fields
-- observedAt
-- bodySide: front/back
-- regionType: head / torso / limb
-- limbType (if applicable): arm / hand / leg / foot
-- size: small / medium / large
-- color tags:
-  - red
-  - purple
-  - blue
-  - green
-  - yellow
-  - brown
-  - fading
-- pain/tenderness (boolean)
-- causeKnown (boolean)
-- causeDescription (optional)
-- status: improving / stable / worsening
-- note (free text)
+Actions:
+- Save
+- Cancel
+- Discard only when stopping an active timer draft
 
-### Actions
+### 3. Bruise Entry Page
+Current behavior:
+- Front/back toggle
+- SVG body map with clickable regions
+- Selected region highlight
+- Inline validation if no region is selected
+
+Fields:
+- Observed at
+- Body side
+- Region
+- Size
+- Color tags
+- Pain/tenderness
+- Cause known
+- Cause description
+- Status
+- Note
+
+Actions:
 - Save
 - Cancel
 
----
-
-## Data Storage
-
-Use IndexedDB with two stores:
-- peeEntries
-- bruiseEntries
-
-Each entry includes:
-- id
-- createdAt
-- updatedAt
-
----
-
-## Log / History
-
-### Views
+### 4. Log / History
+Filters:
 - All
 - Pee only
 - Bruise only
@@ -174,87 +212,207 @@ Each entry includes:
 - Monthly
 - Custom range
 
-### Entry Display
-- Card-based UI
-- Tap to edit
+Entry behavior:
+- Card-based display
+- Direct `Edit` action
+- Direct `Delete` action
+- Delete uses confirmation modal
 
-### Editing
-- Modify fields
-- Explicit Save button
-- Overwrite existing entry
+### 5. Insights
+#### Pee Metrics
+- Total count
+- Average duration
+- Median duration
+- Shortest duration
+- Longest duration
+- Frequency per day
+- Tag frequency
+- Entries by day
+
+Notes:
+- Pee analytics exclude note-only entries
+- `Entries by day` can open the pee chart modal
+- Clicking a specific day in the metric list opens the chart focused on that date
+
+#### Bruise Metrics
+- Total count
+- Unique regions
+- Improving count
+- Stable count
+- Worsening count
+- Region distribution
+- Color frequency
+- Frequency over time
+
+Sparse data handling:
+- Shows `Not enough data yet`
+
+### 6. Pee Graph Modal
+Current behavior:
+- Opens from Pee Insights
+- Default range: all-time
+- Supported ranges:
+  - All-time
+  - 30 days
+  - 7 days
+  - Specific date
+- Specific date picker available
+- Bars can be tapped to select a date
+- Secondary action is `Cancel`
+
+### 7. Export / Import
+Export supported:
+- JSON full backup
+- CSV for pee entries
+- CSV for bruise entries
+
+Import supported:
+- JSON upload
+- Merge existing data
+- Replace existing data
+- Replace uses confirmation modal
+
+### 8. Print View
+Current behavior:
+- Summary cards
+- Full log output
+- Print / Save PDF action
+- Separate back action to return to Export page
 
 ---
 
-## Insights / Analytics
+## Confirmation Modal Policy
 
-### Pee Metrics
-- total count
-- average duration
-- median duration
-- shortest / longest
-- frequency per day
-- tag frequency
+Use in-app confirmation modals for destructive or high-friction actions.
+Current modal-driven confirmations:
+- Cancel active timer
+- Delete log entry
+- Replace local data on import
 
-### Bruise Metrics
-- total count
-- frequency over time
-- region distribution
-- color frequency
-- improving vs worsening
-
-### Sparse Data Handling
-- Show message instead of stats:
-  - "Not enough data yet"
+Do not reintroduce `window.alert` or `window.confirm` for these flows unless there is a strong reason.
 
 ---
 
-## Export / Import
+## Analytics Rules
 
-### Export Formats
-- CSV:
-  - pee entries
-  - bruise entries
-- JSON:
-  - full backup
+### Pee Analytics
+- Based on saved timer entries only
+- Note-only entries do not affect duration statistics
+- Duration is computed from `startTime` and `endTime`
 
-### Import
-- Upload JSON
-- Replace or merge existing data
-
-### Print View
-- Summary section
-- Followed by full logs
-- Designed for browser print → PDF
+### Bruise Analytics
+- Built from all saved bruise entries
+- Region distribution uses `bodySide + regionKey`
+- Frequency over time groups by observed date
 
 ---
 
-## UX Requirements
+## Design / Visual Direction
+
+The current UI is not generic default UI.
+It uses a warm clinical notebook style built around this palette:
+- Shadow Grey: `#272727`
+- Sandy Clay: `#d4aa7d`
+- Apricot Cream: `#efd09e`
+- Beige: `#d2d8b3`
+- Cool Steel: `#90a9b7`
+
+Button color rules:
+- General primary actions use a green family derived to fit the palette
+- Destructive actions use a red family derived to fit the palette
+- The main timer button is green when idle and red when active/stoppable
+
+Design characteristics:
+- Single-column mobile layout
 - Large touch targets
-- Single-column layout
-- Fast navigation
-- No hover interactions
-- Minimal typing required
+- Soft glass/paper surfaces
+- No hover-dependent interactions
+- Fixed bottom navigation
+- Styled modal sheets instead of system dialogs
+
+When changing the UI, preserve this direction unless intentionally redesigning the whole app.
 
 ---
 
-## Safety Notice
-Display in Export page:
+## Routing Model
 
-"Your data is stored only on this device. Export regularly to avoid data loss."
+Routing is hash-based inside `src/App.jsx`.
+Current views are:
+- `home`
+- `bruise`
+- `log`
+- `insights`
+- `export`
+- `print`
+
+This is intentional for a lightweight static app and GitHub Pages compatibility.
 
 ---
 
-## Future Enhancements (Not Required)
-- Photo upload for bruises
-- PWA install support
-- Passcode lock
-- Cloud sync / backend
+## Deployment State
+
+### Git
+- Repository initialized
+- `main` branch in use
+- Remote expected at:
+  - `https://github.com/mlo0352/pbtrack.git`
+
+### GitHub Pages
+Deployment workflow exists in:
+- `.github/workflows/deploy-pages.yml`
+
+Expected Pages config in GitHub:
+- Pages source should be set to `GitHub Actions`
 
 ---
 
-## Deliverables
-- Fully functional static site
-- Works in iPhone Safari
-- No backend dependencies
-- Ready for GitHub Pages deployment
+## Development Notes
 
+### Commands
+- Install: `npm install`
+- Dev server: `npm run dev`
+- Production build: `npm run build`
+
+### Build Output
+- Vite outputs to `dist/`
+
+### Git Ignore
+The repo should ignore at least:
+- `node_modules/`
+- `dist/`
+
+---
+
+## Known Constraints
+
+- No backend
+- No authentication
+- No cloud sync
+- No photos
+- No PWA install flow yet
+- No passcode lock
+- No automated tests yet
+
+---
+
+## Near-Term Enhancement Candidates
+
+These are reasonable next steps if the project continues:
+- Add automated tests for analytics and import/merge behavior
+- Add stronger edit/delete affordances in the recent activity list
+- Add PWA support
+- Add photo attachments for bruises
+- Add export/import schema versioning
+- Split `src/App.jsx` into smaller components if the app grows further
+
+---
+
+## Deliverable Status
+
+Current status:
+- Functional static site: yes
+- Local-first storage: yes
+- iPhone Safari oriented: yes
+- No backend dependencies: yes
+- GitHub Pages ready: yes
+- Deployment workflow present: yes
